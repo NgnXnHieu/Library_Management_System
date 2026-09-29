@@ -96,6 +96,32 @@ public class JwtServiceImpl {
     }
 
     /**
+     * Tạo ResponseCookie rỗng với maxAge = 0 để xóa cookie accessToken trên trình duyệt
+     */
+    public ResponseCookie createCleanAccessTokenCookie() {
+        return ResponseCookie.from("accessToken", "")
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Lax")
+                .build();
+    }
+
+    /**
+     * Tạo ResponseCookie rỗng với maxAge = 0 để xóa cookie refreshToken trên trình duyệt
+     */
+    public ResponseCookie createCleanRefreshTokenCookie() {
+        return ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Lax")
+                .build();
+    }
+
+    /**
      * Tạo access token chứa accountId, tokenType: ACCESS, thời gian hết hạn
      */
     public String generateAccessToken(Long accountId) {
@@ -224,14 +250,15 @@ public class JwtServiceImpl {
     }
 
     /**
-     * Xác thực Account và User từ accountId, lấy đầy đủ branchId và roleCode để gán vào UserDetailCustom
-     * phục vụ lưu trữ vào SecurityContext sau này.
+     * Xác thực Account và User từ accountId, kiểm tra tính khớp của token với DB, lấy đầy đủ branchId và roleCode
+     * để gán vào UserDetailCustom phục vụ lưu trữ vào SecurityContext.
      *
      * @param accountId ID của tài khoản
+     * @param token     Chuỗi access token gửi lên từ client (nếu có để kiểm tra khớp với DB)
      * @return UserDetailCustom chứa accountId, userId, branchId, roleCode
      */
     @Transactional(readOnly = true)
-    public UserDetailCustom getUserDetailsByAccountId(Long accountId) {
+    public UserDetailCustom getUserDetailsByAccountId(Long accountId, String token) {
         if (accountId == null) {
             throw new BadRequestException("AccountId không được để trống!");
         }
@@ -240,15 +267,23 @@ public class JwtServiceImpl {
             throw new IllegalStateException("AccountRepository hoặc UserRepository chưa được khởi tạo trong JwtServiceImpl!");
         }
 
-        // 1. Kiểm tra xem account có tồn tại và có active không
+        // Bước 1: Kiểm tra xem tài khoản (Account) có tồn tại trong DB không
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new BadRequestException("Không tìm thấy tài khoản với ID: " + accountId));
 
+        // Bước 2: Kiểm tra trạng thái tài khoản có ACTIVE không
         if (!"ACTIVE".equalsIgnoreCase(account.getStatus())) {
             throw new BadRequestException("Tài khoản đã bị khóa hoặc chưa được kích hoạt!");
         }
 
-        // 2. Kiểm tra xem user chứa accountId đó có tồn tại và có active không (join fetch role và branch)
+        // Bước 3: Kiểm tra token gửi lên có khớp với token đang lưu trong DB không (tránh dùng token cũ/đã đăng xuất/bị ghi đè)
+        if (token != null) {
+            if (account.getToken() == null || !token.equals(account.getToken())) {
+                throw new BadRequestException("Phiên đăng nhập không hợp lệ hoặc tài khoản đã đăng nhập trên thiết bị khác!");
+            }
+        }
+
+        // Bước 4: Kiểm tra xem user chứa accountId đó có tồn tại và ACTIVE không (join fetch role và branch)
         User user = userRepository.findByAccountIdWithDetails(accountId)
                 .orElseThrow(() -> new BadRequestException("Không tìm thấy thông tin người dùng liên kết với tài khoản ID: " + accountId));
 
@@ -256,11 +291,11 @@ public class JwtServiceImpl {
             throw new BadRequestException("Thông tin người dùng đã bị khóa hoặc ngừng hoạt động!");
         }
 
-        // 3. Trích xuất branchId (nếu có) và roleCode (nếu có)
+        // Bước 5: Trích xuất branchId (nếu có) và roleCode (nếu có)
         Long branchId = (user.getBranch() != null) ? user.getBranch().getId() : null;
         String roleCode = (user.getRole() != null) ? user.getRole().getCode() : null;
 
-        // 4. Gán vào UserDetailCustom
+        // Bước 6: Đóng gói dữ liệu vào UserDetailCustom
         return UserDetailCustom.builder()
                 .accountId(account.getId())
                 .userId(user.getId())
@@ -269,6 +304,14 @@ public class JwtServiceImpl {
                 .username(account.getUsername())
                 .fullName(user.getFullName())
                 .build();
+    }
+
+    /**
+     * Overload method hỗ trợ lấy thông tin user theo accountId mà không cần kiểm tra token DB (dành cho test/nội bộ)
+     */
+    @Transactional(readOnly = true)
+    public UserDetailCustom getUserDetailsByAccountId(Long accountId) {
+        return getUserDetailsByAccountId(accountId, null);
     }
 }
 

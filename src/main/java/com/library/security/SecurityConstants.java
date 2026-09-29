@@ -12,10 +12,23 @@ public final class SecurityConstants {
             "/error",
             "/actuator/**",
             "/swagger-ui/**",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            "/roles"
     };
 
     public static final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";
     public static final String AUTHORIZATION_HEADER = "Authorization";
     public static final String BEARER_PREFIX = "Bearer ";
+
+    public static final String[] ADMIN_ENDPOINTS = {
+
+    };
+
+    public static final String[] STAFF_ENDPOINTS = {
+
+    };
+
+    public static final String[] BM_ENDPOINTS = {
+
+    };
 }

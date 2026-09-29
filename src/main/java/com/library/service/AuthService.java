@@ -10,4 +10,9 @@ public interface AuthService {
     UserResponseDto register(RegisterRequestForm form);
 
     LoginResponseDto login(LoginRequestForm form);
+
+    /**
+     * Đăng xuất tài khoản hiện tại: xóa token lưu trong DB và dọn dẹp SecurityContext
+     */
+    void logout();
 }

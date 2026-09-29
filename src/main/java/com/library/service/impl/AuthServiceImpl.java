@@ -15,7 +15,9 @@ import com.library.repository.UserRepository;
 import com.library.requestform.account.LoginRequestForm;
 import com.library.requestform.account.RegisterRequestForm;
 import com.library.service.AuthService;
+import com.library.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -106,18 +108,45 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Tài khoản người dùng đã bị khóa hoặc ngừng hoạt động!");
         }
 
-        // 4. Cập nhật thời gian đăng nhập gần nhất
-        account.setLastLoginAt(LocalDateTime.now());
-        accountRepository.save(account);
-
-        // 5. Tạo JWT token chứa accountId, thời gian hết hạn, loại token
+        // 4. Tạo JWT token chứa accountId, thời gian hết hạn, loại token
         String accessToken = jwtService.generateAccessToken(account.getId());
         String refreshToken = jwtService.generateRefreshToken(account.getId());
+
+        // 5. Cập nhật thời gian đăng nhập gần nhất và lưu token, refreshToken vào database
+        account.setLastLoginAt(LocalDateTime.now());
+        account.setToken(accessToken);
+        account.setRefreshToken(refreshToken);
+        accountRepository.save(account);
 
         // 6. Trả về thông tin accessToken và refreshToken
         return LoginResponseDto.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
+    }
+
+    /**
+     * Xử lý đăng xuất:
+     * - Dùng SecurityUtil lấy accountId đang đăng nhập.
+     * - Xóa token và refreshToken trong DB để vô hiệu hóa phiên làm việc.
+     * - Xóa thông tin xác thực trong SecurityContextHolder.
+     */
+    @Override
+    @Transactional
+    public void logout() {
+        // Bước 1: Lấy accountId của người dùng hiện tại từ SecurityUtil (sẽ ném exception 401 nếu chưa đăng nhập)
+        Long currentAccountId = SecurityUtil.getRequiredAccountId();
+
+        // Bước 2: Tìm kiếm tài khoản trong database
+        Account account = accountRepository.findById(currentAccountId)
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy tài khoản với ID: " + currentAccountId));
+
+        // Bước 3: Xóa token và refreshToken đã lưu trong tài khoản để vô hiệu hóa
+        account.setToken(null);
+        account.setRefreshToken(null);
+        accountRepository.save(account);
+
+        // Bước 4: Xóa sạch thông tin xác thực trong SecurityContextHolder
+        SecurityContextHolder.clearContext();
     }
 }

@@ -47,4 +47,25 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(ApiResponse.success("Đăng nhập thành công!", null));
     }
+
+    /**
+     * API Đăng xuất:
+     * - Gọi AuthService để xóa token và refreshToken trong DB của account hiện tại.
+     * - Tạo response xóa Cookie accessToken và refreshToken trên trình duyệt.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout() {
+        // Bước 1: Gọi xuống tầng Service để xử lý nghiệp vụ xóa token trong DB và dọn SecurityContext
+        authService.logout();
+
+        // Bước 2: Tạo cookie rỗng với maxAge = 0 để xóa cookie phía client/browser
+        ResponseCookie cleanAccessCookie = jwtService.createCleanAccessTokenCookie();
+        ResponseCookie cleanRefreshCookie = jwtService.createCleanRefreshTokenCookie();
+
+        // Bước 3: Đính kèm header Set-Cookie để client xóa cookie và trả về thông báo thành công
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cleanAccessCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, cleanRefreshCookie.toString())
+                .body(ApiResponse.success("Đăng xuất thành công!", null));
+    }
 }

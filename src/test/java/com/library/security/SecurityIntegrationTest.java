@@ -58,7 +58,7 @@ class SecurityIntegrationTest {
         when(jwtService.isTokenValid(token)).thenReturn(true);
         when(jwtService.isAccessToken(token)).thenReturn(true);
         when(jwtService.extractAccountId(token)).thenReturn(accountId);
-        when(jwtService.getUserDetailsByAccountId(accountId)).thenReturn(userDetails);
+        when(jwtService.getUserDetailsByAccountId(accountId, token)).thenReturn(userDetails);
 
         mockMvc.perform(get("/roles")
                         .cookie(new Cookie(SecurityConstants.ACCESS_TOKEN_COOKIE_NAME, token)))
@@ -81,7 +81,7 @@ class SecurityIntegrationTest {
         when(jwtService.isTokenValid(token)).thenReturn(true);
         when(jwtService.isAccessToken(token)).thenReturn(true);
         when(jwtService.extractAccountId(token)).thenReturn(accountId);
-        when(jwtService.getUserDetailsByAccountId(accountId)).thenReturn(userDetails);
+        when(jwtService.getUserDetailsByAccountId(accountId, token)).thenReturn(userDetails);
 
         mockMvc.perform(get("/roles")
                         .header(SecurityConstants.AUTHORIZATION_HEADER, SecurityConstants.BEARER_PREFIX + token))
