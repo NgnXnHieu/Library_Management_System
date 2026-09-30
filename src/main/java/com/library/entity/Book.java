@@ -1,7 +1,10 @@
 package com.library.entity;
 
+import com.library.enums.DisplayStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -14,6 +17,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -51,14 +55,20 @@ public class Book extends BaseEntity {
     @Column(name = "cover_image_key", length = 255)
     private String coverImageKey;
 
+    @Column(name = "price", precision = 15, scale = 2)
+    private BigDecimal price;
+
+    @Column(name = "rental_price", precision = 15, scale = 2)
+    private BigDecimal rentalPrice;
+
+    @Column(name = "fine_amount", precision = 15, scale = 2)
+    private BigDecimal fineAmount;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
-    private String status;
+    private DisplayStatus status;
 
     @Builder.Default
     @OneToMany(mappedBy = "book", fetch = FetchType.LAZY)
-    private List<BranchBook> branchBooks = new ArrayList<>();
-
-    @Builder.Default
-    @OneToMany(mappedBy = "book", fetch = FetchType.LAZY)
-    private List<BorrowItem> borrowItems = new ArrayList<>();
+    private List<Inventory> inventories = new ArrayList<>();
 }

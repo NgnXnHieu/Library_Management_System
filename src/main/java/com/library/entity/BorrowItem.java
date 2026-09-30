@@ -12,8 +12,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
-import java.time.LocalDateTime;
-
+/**
+ * Thực thể chi tiết mượn sách thuộc phiếu mượn (BorrowItem).
+ * Đại diện cho số lượng sách mượn từ tồn kho của chi nhánh.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,21 +30,9 @@ public class BorrowItem extends BaseEntity {
     private BorrowSlip borrowSlip;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "book_id", referencedColumnName = "id", nullable = false)
-    private Book book;
+    @JoinColumn(name = "inventory_id", referencedColumnName = "id", nullable = false)
+    private Inventory inventory;
 
     @Column(name = "quantity", nullable = false)
     private Integer quantity;
-
-    @Column(name = "renewal_count")
-    private Integer renewalCount;
-
-    @Column(name = "due_at")
-    private LocalDateTime dueAt;
-
-    @Column(name = "returned_at")
-    private LocalDateTime returnedAt;
-
-    @Column(name = "status", length = 20)
-    private String status;
 }

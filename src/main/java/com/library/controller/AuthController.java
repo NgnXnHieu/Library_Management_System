@@ -19,14 +19,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
     private final JwtServiceImpl jwtService;
 
-    @PostMapping("/register")
+    // API đăng ký tài khoản công khai (tiền tố /public/auth)
+    @PostMapping({"/public/auth/register", "/auth/register"})
     public ResponseEntity<ApiResponse<UserResponseDto>> register(@Valid @RequestBody RegisterRequestForm requestForm) {
         UserResponseDto responseDto = authService.register(requestForm);
         return ResponseEntity
@@ -34,7 +34,8 @@ public class AuthController {
                 .body(ApiResponse.success("Đăng ký tài khoản thành công!", responseDto));
     }
 
-    @PostMapping("/login")
+    // API đăng nhập công khai (tiền tố /public/auth)
+    @PostMapping({"/public/auth/login", "/auth/login"})
     public ResponseEntity<ApiResponse<LoginResponseDto>> login(@Valid @RequestBody LoginRequestForm requestForm) {
         LoginResponseDto responseDto = authService.login(requestForm);
 
@@ -53,16 +54,18 @@ public class AuthController {
      * - Gọi AuthService để xóa token và refreshToken trong DB của account hiện tại.
      * - Tạo response xóa Cookie accessToken và refreshToken trên trình duyệt.
      */
-    @PostMapping("/logout")
+    @PostMapping({"/auth/logout", "/logout"})
     public ResponseEntity<ApiResponse<Void>> logout() {
-        // Bước 1: Gọi xuống tầng Service để xử lý nghiệp vụ xóa token trong DB và dọn SecurityContext
+        // Bước 1: Gọi xuống tầng Service để xử lý nghiệp vụ xóa token trong DB và dọn
+        // SecurityContext
         authService.logout();
 
         // Bước 2: Tạo cookie rỗng với maxAge = 0 để xóa cookie phía client/browser
         ResponseCookie cleanAccessCookie = jwtService.createCleanAccessTokenCookie();
         ResponseCookie cleanRefreshCookie = jwtService.createCleanRefreshTokenCookie();
 
-        // Bước 3: Đính kèm header Set-Cookie để client xóa cookie và trả về thông báo thành công
+        // Bước 3: Đính kèm header Set-Cookie để client xóa cookie và trả về thông báo
+        // thành công
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cleanAccessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, cleanRefreshCookie.toString())

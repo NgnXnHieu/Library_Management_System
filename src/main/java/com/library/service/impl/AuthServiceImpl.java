@@ -67,8 +67,7 @@ public class AuthServiceImpl implements AuthService {
                                 .code("CUSTOMER")
                                 .name("Khách hàng")
                                 .description("Vai trò mặc định khi đăng ký tài khoản")
-                                .build()
-                ));
+                                .build()));
 
         // 6. Tạo và lưu User mới
         User user = userMapper.toEntity(form);
@@ -112,7 +111,8 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtService.generateAccessToken(account.getId());
         String refreshToken = jwtService.generateRefreshToken(account.getId());
 
-        // 5. Cập nhật thời gian đăng nhập gần nhất và lưu token, refreshToken vào database
+        // 5. Cập nhật thời gian đăng nhập gần nhất và lưu token, refreshToken vào
+        // database
         account.setLastLoginAt(LocalDateTime.now());
         account.setToken(accessToken);
         account.setRefreshToken(refreshToken);
@@ -134,7 +134,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logout() {
-        // Bước 1: Lấy accountId của người dùng hiện tại từ SecurityUtil (sẽ ném exception 401 nếu chưa đăng nhập)
+        // Bước 1: Lấy accountId của người dùng hiện tại từ SecurityUtil (sẽ ném
+        // exception 401 nếu chưa đăng nhập)
         Long currentAccountId = SecurityUtil.getRequiredAccountId();
 
         // Bước 2: Tìm kiếm tài khoản trong database

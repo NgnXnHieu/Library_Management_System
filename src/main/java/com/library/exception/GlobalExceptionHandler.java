@@ -83,6 +83,20 @@ public class GlobalExceptionHandler {
     // =========================================================================
 
     /**
+     * Bắt lỗi nghiệp vụ tập trung AppException (tự động lấy mã lỗi, thông điệp và HttpStatus tương ứng)
+     */
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
+        ErrorCode errorCode = ex.getErrorCode();
+        ApiResponse<Void> response = ApiResponse.error(
+                errorCode.getHttpStatus().value(),
+                ex.getMessage(),
+                errorCode.getCode()
+        );
+        return ResponseEntity.status(errorCode.getHttpStatus()).body(response);
+    }
+
+    /**
      * Bắt lỗi 404: Không tìm thấy tài nguyên theo ID, Code,...
      */
     @ExceptionHandler(ResourceNotFoundException.class)

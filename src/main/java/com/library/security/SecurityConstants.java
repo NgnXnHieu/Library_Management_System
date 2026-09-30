@@ -7,13 +7,14 @@ public final class SecurityConstants {
     }
 
     public static final String[] PUBLIC_ENDPOINTS = {
+            "/public/**",
+            "/uploads/**",
             "/auth/**",
             "/hello/**",
             "/error",
             "/actuator/**",
             "/swagger-ui/**",
-            "/v3/api-docs/**",
-            "/roles"
+            "/v3/api-docs/**"
     };
 
     public static final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";

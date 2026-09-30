@@ -39,10 +39,14 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(SecurityConstants.PUBLIC_ENDPOINTS).permitAll()
-                        .anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(auth -> {
+                    // Bước 1: Các endpoint công khai (Public có tiền tố /public/**, Swagger, Actuator) không cần xác thực
+                    auth.requestMatchers(SecurityConstants.PUBLIC_ENDPOINTS).permitAll();
+
+                    // Bước 2: Toàn bộ các request còn lại BẮT BUỘC PHẢI ĐĂNG NHẬP
+                    // Phân quyền chi tiết (ADMIN, STAFF, BRANCHMANAGER, CUSTOMER...) sẽ do @PreAuthorize tại Controller đảm nhiệm
+                    auth.anyRequest().authenticated();
+                })
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->
                                 resolver.resolveException(request, response, null, authException))

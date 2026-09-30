@@ -7,9 +7,13 @@ import com.library.exception.BadRequestException;
 import com.library.exception.ResourceNotFoundException;
 import com.library.mapper.UserMapper;
 import com.library.repository.UserRepository;
+import com.library.requestform.user.UserFilterRequestForm;
 import com.library.requestform.user.UserUpdateRequestForm;
 import com.library.service.UserService;
+import com.library.specification.UserSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,5 +89,28 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + id));
         userRepository.delete(user);
+    }
+
+    /**
+     * Lấy danh sách người dùng theo bộ lọc tìm kiếm và sắp xếp cũ đến mới theo createdAt.
+     * Sử dụng JPA Specification và JOIN FETCH account để tối ưu hiệu năng và tránh N+1 query.
+     *
+     * @param filter Bộ lọc tìm kiếm người dùng (username, fullName, phone, email)
+     * @return Danh sách DTO người dùng thỏa mãn điều kiện
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponseDto> filterUsers(UserFilterRequestForm filter) {
+        // Bước 1: Xây dựng Specification truy vấn lọc kết hợp JOIN FETCH account
+        Specification<User> spec = UserSpecification.filter(filter);
+
+        // Bước 2: Thiết lập sắp xếp theo thứ tự cũ đến mới của created_at (createdAt ASC)
+        Sort sort = Sort.by(Sort.Direction.ASC, "createdAt");
+
+        // Bước 3: Thực hiện truy vấn danh sách người dùng từ Database
+        List<User> users = userRepository.findAll(spec, sort);
+
+        // Bước 4: Chuyển đổi danh sách User entity sang danh sách UserResponseDto bằng MapStruct
+        return userMapper.toDtoList(users);
     }
 }

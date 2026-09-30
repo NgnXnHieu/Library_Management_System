@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,13 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/roles")
 @RequiredArgsConstructor
 public class RoleController {
 
     private final RoleService roleService;
 
-    @PostMapping
+    @PostMapping("/roles")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<RoleResponseDto>> createRole(
             @Valid @RequestBody RoleCreateRequestForm form) {
         RoleResponseDto createdRole = roleService.createRole(form);
@@ -36,19 +37,20 @@ public class RoleController {
                 .body(ApiResponse.success("Thêm mới vai trò thành công!", createdRole));
     }
 
-    @GetMapping
+    @GetMapping("/roles")
     public ResponseEntity<ApiResponse<List<RoleResponseDto>>> getAllRoles() {
         List<RoleResponseDto> roles = roleService.getAllRoles();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách vai trò thành công!", roles));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/roles/{id}")
     public ResponseEntity<ApiResponse<RoleResponseDto>> getRoleById(@PathVariable Long id) {
         RoleResponseDto role = roleService.getRoleById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin vai trò thành công!", role));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/roles/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<RoleResponseDto>> updateRole(
             @PathVariable Long id,
             @Valid @RequestBody RoleUpdateRequestForm form) {
@@ -56,7 +58,8 @@ public class RoleController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật vai trò thành công!", updatedRole));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/roles/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable Long id) {
         roleService.deleteRole(id);
         return ResponseEntity.ok(ApiResponse.success("Xóa vai trò thành công!", null));

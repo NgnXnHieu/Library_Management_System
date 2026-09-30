@@ -3,6 +3,7 @@ package com.library.repository;
 import com.library.entity.User;
 import com.library.enums.AccountStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -11,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
     Optional<User> findByEmail(String email);
 
@@ -26,6 +27,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByPhoneAndIdNot(String phone, Long id);
 
     boolean existsByRoleId(Long roleId);
+
+    boolean existsByBranchId(Long branchId);
 
     Optional<User> findByAccountId(Long accountId);
 
