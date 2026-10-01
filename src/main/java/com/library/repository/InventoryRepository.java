@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,4 +51,16 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long>, Jpa
      * @return Danh sách các bản ghi Inventory của chi nhánh
      */
     List<Inventory> findAllByBranchId(Long branchId);
+
+    /**
+     * Lấy danh sách tồn kho theo danh sách ID và chi nhánh, kết hợp JOIN FETCH sách để tránh N+1 query.
+     *
+     * @param branchId ID chi nhánh
+     * @param ids      Danh sách ID tồn kho cần tìm
+     * @return Danh sách Inventory kèm thông tin Book
+     */
+    @Query("SELECT i FROM Inventory i " +
+           "JOIN FETCH i.book b " +
+           "WHERE i.branch.id = :branchId AND i.id IN :ids")
+    List<Inventory> findAllByBranchIdAndIdInWithBook(@Param("branchId") Long branchId, @Param("ids") Collection<Long> ids);
 }

@@ -1,8 +1,12 @@
 package com.library.entity;
 
+import com.library.enums.BorrowStatus;
+import com.library.enums.PaymentStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -15,10 +19,15 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Thực thể phiếu mượn sách (BorrowSlip).
+ * Quản lý thông tin độc giả mượn, nhân viên tạo phiếu, chi nhánh và trạng thái mượn trả.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -52,8 +61,32 @@ public class BorrowSlip extends BaseEntity {
     @Column(name = "returned_at")
     private LocalDateTime returnedAt;
 
+    /**
+     * Trạng thái của phiếu mượn (BORROWED: đang mượn, RETURNED: đã trả, OVERDUE: quá hạn).
+     */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30)
-    private String status;
+    private BorrowStatus status;
+
+    /**
+     * Trạng thái thanh toán của phiếu mượn (UNPAID: Chưa thanh toán, PAID: Đã thanh toán).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", length = 20, nullable = false)
+    @Builder.Default
+    private PaymentStatus paymentStatus = PaymentStatus.UNPAID;
+
+    /**
+     * Tổng số lượng sách mượn trong phiếu.
+     */
+    @Column(name = "total_quantity")
+    private Integer totalQuantity;
+
+    /**
+     * Tổng tiền thuê sách của phiếu mượn (tính từ tổng số lượng của từng cuốn * giá thuê rentalPrice).
+     */
+    @Column(name = "total_amount", precision = 15, scale = 2)
+    private BigDecimal totalAmount;
 
     @Builder.Default
     @OneToMany(mappedBy = "borrowSlip", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

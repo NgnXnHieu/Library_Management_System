@@ -1,7 +1,12 @@
 package com.library.entity;
 
+import com.library.enums.PaymentMethod;
+import com.library.enums.PaymentPurpose;
+import com.library.enums.PaymentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -15,6 +20,11 @@ import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * Thực thể quản lý các giao dịch thanh toán trong hệ thống thư viện.
+ * Bao gồm thanh toán tiền thuê sách, tiền phạt quá hạn và bồi thường hư hỏng
+ * sách.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -38,8 +48,20 @@ public class Payment extends BaseEntity {
     @Column(name = "amount", precision = 15, scale = 2, nullable = false)
     private BigDecimal amount;
 
-    @Column(name = "payment_type", length = 30)
-    private String paymentType;
+    /**
+     * Phương thức thanh toán (CASH: Tiền mặt, BANK_TRANSFER: Chuyển khoản).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 30)
+    private PaymentMethod paymentMethod;
+
+    /**
+     * Mục đích thanh toán (RENTAL_FEE: Tiền thuê sách, OVERDUE_FINE: Tiền phạt quá
+     * hạn, COMPENSATION: Bồi thường).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_purpose", length = 30)
+    private PaymentPurpose paymentPurpose;
 
     @Column(name = "provider", length = 30)
     private String provider;
@@ -47,8 +69,12 @@ public class Payment extends BaseEntity {
     @Column(name = "transaction_code", length = 100)
     private String transactionCode;
 
-    @Column(name = "status", length = 20)
-    private String status;
+    /**
+     * Trạng thái thanh toán (UNPAID: Chưa trả, PAID: Đã trả).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    private PaymentStatus status;
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;

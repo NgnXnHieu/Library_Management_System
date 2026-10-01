@@ -14,7 +14,9 @@ public final class SecurityConstants {
             "/error",
             "/actuator/**",
             "/swagger-ui/**",
-            "/v3/api-docs/**"
+            "/swagger-ui.html",
+            "/v3/api-docs/**",
+            "/v3/api-docs"
     };
 
     public static final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";
