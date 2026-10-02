@@ -2,9 +2,11 @@ package com.library.mapper;
 
 import com.library.dto.inventory.InventoryResponseDto;
 import com.library.entity.Inventory;
+import com.library.util.FileUtil;
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.Named;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 import org.mapstruct.ReportingPolicy;
 
@@ -29,6 +31,7 @@ public interface InventoryMapper {
     @Mapping(source = "book.id", target = "bookId")
     @Mapping(source = "book.title", target = "bookTitle")
     @Mapping(source = "book.isbn", target = "isbn")
+    @Mapping(source = "book.coverImageKey", target = "coverImageUrl", qualifiedByName = "mapCoverImageUrl")
     @Mapping(source = "book.category.id", target = "categoryId")
     @Mapping(source = "book.category.name", target = "categoryName")
     @Mapping(source = "book.price", target = "price")
@@ -40,4 +43,12 @@ public interface InventoryMapper {
      * Map danh sách Entity Inventory sang danh sách DTO.
      */
     List<InventoryResponseDto> toDtoList(List<Inventory> inventories);
+
+    /**
+     * Chuyển đổi coverImageKey thành đường dẫn URL xem ảnh đầy đủ
+     */
+    @Named("mapCoverImageUrl")
+    default String mapCoverImageUrl(String coverImageKey) {
+        return FileUtil.buildFileUrl(coverImageKey);
+    }
 }

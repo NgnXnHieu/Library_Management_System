@@ -45,7 +45,9 @@ public interface UserMapper {
 
     /**
      * Cập nhật thông tin User hiện có từ UserUpdateRequestForm
+     * Bỏ qua trường 'role' vì logic gán Role đã được xử lý và kiểm tra quyền riêng trong Service
      * Các trường null trong form sẽ tự động được bỏ qua, giữ nguyên dữ liệu cũ
      */
+    @Mapping(target = "role", ignore = true)
     void updateEntityFromForm(UserUpdateRequestForm form, @MappingTarget User user);
 }

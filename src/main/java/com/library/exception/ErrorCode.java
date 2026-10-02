@@ -59,6 +59,7 @@ public enum ErrorCode {
     // =========================================================================
     BOOK_NOT_FOUND("BOOK_NOT_FOUND", "Không tìm thấy sách với ID: %s", HttpStatus.NOT_FOUND),
     BOOK_ALREADY_EXISTS("BOOK_ALREADY_EXISTS", "Mã ISBN '%s' đã tồn tại trên hệ thống!", HttpStatus.BAD_REQUEST),
+    BOOK_CANNOT_DELETE("BOOK_CANNOT_DELETE", "Không thể xóa sách '%s' vì đã phát sinh giao dịch mượn sách!", HttpStatus.BAD_REQUEST),
     INVALID_FILE("INVALID_FILE", "%s", HttpStatus.BAD_REQUEST);
 
     /**

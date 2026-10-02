@@ -37,4 +37,19 @@ public interface BookService {
      * @return DTO thông tin sách sau khi cập nhật
      */
     BookResponseDto updateBook(Long id, BookUpdateRequestForm form);
+
+    /**
+     * Lấy danh sách phân trang các đầu sách kèm theo bộ lọc mở rộng và sắp xếp (Dành riêng cho ADMIN).
+     *
+     * @param filter Bộ lọc tìm kiếm và thông tin phân trang
+     * @return Trang kết quả chứa danh sách BookResponseDto
+     */
+    Page<BookResponseDto> getBooksWithFilter(BookFilterRequestForm filter);
+
+    /**
+     * Xóa đầu sách khỏi hệ thống (Chỉ dành cho ADMIN).
+     *
+     * @param id ID của đầu sách cần xóa
+     */
+    void deleteBook(Long id);
 }

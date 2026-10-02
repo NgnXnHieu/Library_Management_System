@@ -2,21 +2,24 @@ package com.library.controller;
 
 import com.library.dto.ApiResponse;
 import com.library.dto.branch.BranchResponseDto;
+import com.library.enums.BranchStatus;
 import com.library.requestform.branch.BranchCreateRequestForm;
+import com.library.requestform.branch.BranchFilterRequestForm;
 import com.library.requestform.branch.BranchUpdateRequestForm;
 import com.library.service.BranchService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -107,5 +110,37 @@ public class BranchController {
     public ResponseEntity<ApiResponse<List<BranchResponseDto>>> getPublicBranches() {
         List<BranchResponseDto> branches = branchService.getAllBranches();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách chi nhánh thành công!", branches));
+    }
+
+    /**
+     * API lấy danh sách phân trang các chi nhánh kèm bộ lọc tìm kiếm và sắp xếp (Dành riêng cho ADMIN).
+     * Mặc định sắp xếp theo createdAt với thời gian mới nhất lên đầu (DESC).
+     *
+     * @param filter Bộ lọc tìm kiếm (code, name, address, phone, status) và tham số phân trang nhận qua Query Parameters
+     * @return Trang kết quả chứa danh sách DTO chi nhánh bọc trong chuẩn ApiResponse
+     */
+    @GetMapping("/admin/branches")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Page<BranchResponseDto>>> getBranchesPage(
+            @Valid @ModelAttribute BranchFilterRequestForm filter) {
+        // Bước 1: Gọi tầng Service xử lý truy vấn phân trang qua Specification
+        Page<BranchResponseDto> result = branchService.getBranchesWithFilter(filter);
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách chi nhánh phân trang thành công!", result));
+    }
+
+    /**
+     * API công khai lấy danh sách toàn bộ các giá trị trạng thái hoạt động của chi nhánh (Không cần đăng nhập, tiền tố /public).
+     *
+     * @return Danh sách các enum BranchStatus (OPEN, CLOSED) bọc trong chuẩn ApiResponse
+     */
+    @GetMapping("/public/branches/statuses")
+    public ResponseEntity<ApiResponse<List<BranchStatus>>> getBranchStatuses() {
+        // Bước 1: Gọi tầng Service lấy danh sách các trạng thái chi nhánh
+        List<BranchStatus> statuses = branchService.getBranchStatuses();
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách trạng thái chi nhánh thành công!", statuses));
     }
 }

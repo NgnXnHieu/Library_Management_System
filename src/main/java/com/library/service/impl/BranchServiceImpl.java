@@ -2,6 +2,7 @@ package com.library.service.impl;
 
 import com.library.dto.branch.BranchResponseDto;
 import com.library.entity.Branch;
+import com.library.enums.BranchStatus;
 import com.library.enums.Role;
 import com.library.exception.AppException;
 import com.library.exception.ErrorCode;
@@ -9,14 +10,22 @@ import com.library.mapper.BranchMapper;
 import com.library.repository.BranchRepository;
 import com.library.repository.UserRepository;
 import com.library.requestform.branch.BranchCreateRequestForm;
+import com.library.requestform.branch.BranchFilterRequestForm;
 import com.library.requestform.branch.BranchUpdateRequestForm;
 import com.library.service.BranchService;
+import com.library.specification.BranchSpecification;
+import com.library.util.FileUtil;
 import com.library.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service triển khai các nghiệp vụ quản lý chi nhánh thư viện.
@@ -24,6 +33,10 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class BranchServiceImpl implements BranchService {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "code", "name", "address", "phone", "status", "createdAt", "updatedAt"
+    );
 
     private final BranchRepository branchRepository;
     private final UserRepository userRepository;
@@ -55,6 +68,11 @@ public class BranchServiceImpl implements BranchService {
         // Chuẩn hóa số điện thoại nếu rỗng
         if (form.getPhone() != null && form.getPhone().trim().isEmpty()) {
             branch.setPhone(null);
+        }
+
+        // Chuẩn hóa đường dẫn ảnh nếu rỗng
+        if (form.getImageUrl() != null && form.getImageUrl().trim().isEmpty()) {
+            branch.setImageUrl(null);
         }
 
         Branch savedBranch = branchRepository.save(branch);
@@ -89,7 +107,16 @@ public class BranchServiceImpl implements BranchService {
             branch.setCode(newCode);
         }
 
-        // Bước 4: Cập nhật các trường dữ liệu từ form vào entity qua MapStruct
+        // Bước 4: Nếu người dùng cập nhật ảnh mới khác với ảnh cũ -> Xóa file ảnh cũ trên ổ đĩa để tránh rác dung lượng
+        String oldImageUrl = branch.getImageUrl();
+        String newImageUrl = form.getImageUrl();
+        if (newImageUrl != null && !newImageUrl.trim().isEmpty() && !newImageUrl.trim().equals(oldImageUrl)) {
+            if (oldImageUrl != null && !oldImageUrl.trim().isEmpty()) {
+                FileUtil.deleteFile(oldImageUrl);
+            }
+        }
+
+        // Bước 5: Cập nhật các trường dữ liệu từ form vào entity qua MapStruct
         branchMapper.updateEntityFromForm(form, branch);
 
         // Chuẩn hóa số điện thoại nếu form gửi chuỗi rỗng
@@ -99,7 +126,7 @@ public class BranchServiceImpl implements BranchService {
 
         Branch updatedBranch = branchRepository.save(branch);
 
-        // Bước 5: Chuyển đổi sang DTO và trả về
+        // Bước 6: Chuyển đổi sang DTO và trả về
         return branchMapper.toDto(updatedBranch);
     }
 
@@ -124,8 +151,16 @@ public class BranchServiceImpl implements BranchService {
             throw new AppException(ErrorCode.BRANCH_CANNOT_DELETE, branch.getName());
         }
 
-        // Bước 4: Thực hiện xóa chi nhánh
+        // Bước 4: Lưu lại đường dẫn ảnh để xóa file sau khi xóa thành công trong DB
+        String imageToDelete = branch.getImageUrl();
+
+        // Bước 5: Thực hiện xóa chi nhánh khỏi Database
         branchRepository.delete(branch);
+
+        // Bước 6: Xóa tệp ảnh của chi nhánh trên ổ đĩa máy chủ nếu có
+        if (imageToDelete != null && !imageToDelete.trim().isEmpty()) {
+            FileUtil.deleteFile(imageToDelete);
+        }
     }
 
     /**
@@ -152,6 +187,55 @@ public class BranchServiceImpl implements BranchService {
     public List<BranchResponseDto> getAllBranches() {
         List<Branch> branches = branchRepository.findAll();
         return branchMapper.toDtoList(branches);
+    }
+
+    /**
+     * Lấy danh sách phân trang các chi nhánh kèm bộ lọc tìm kiếm và sắp xếp.
+     * Mặc định sắp xếp theo createdAt với thời gian mới nhất lên đầu (DESC).
+     *
+     * @param filter Bộ lọc chứa code, name, address, phone, status và tham số phân trang
+     * @return Trang kết quả phân trang chứa DTO chi nhánh
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BranchResponseDto> getBranchesWithFilter(BranchFilterRequestForm filter) {
+        // Bước 1: Chuẩn hóa tham số bộ lọc nếu client gửi null
+        if (filter == null) {
+            filter = new BranchFilterRequestForm();
+        }
+
+        // Bước 2: Xác định trường sắp xếp an toàn (mặc định createdAt)
+        String sortBy = filter.getSortBy();
+        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy.trim())) {
+            sortBy = "createdAt";
+        } else {
+            sortBy = sortBy.trim();
+        }
+
+        // Bước 3: Xác định hướng sắp xếp (mặc định desc: mới nhất lên đầu)
+        Sort.Direction direction = "asc".equalsIgnoreCase(filter.getSortDir())
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
+        // Bước 4: Tạo đối tượng Pageable của Spring Data JPA
+        int pageNumber = Math.max(0, filter.getPage());
+        int pageSize = Math.max(1, filter.getSize());
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by(direction, sortBy));
+
+        // Bước 5: Truy vấn Database qua BranchSpecification và ánh xạ sang DTO bằng MapStruct
+        Page<Branch> branchPage = branchRepository.findAll(BranchSpecification.filter(filter), pageable);
+        return branchPage.map(branchMapper::toDto);
+    }
+
+    /**
+     * Lấy danh sách toàn bộ trạng thái hoạt động của chi nhánh (BranchStatus).
+     *
+     * @return Danh sách các giá trị enum BranchStatus
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<BranchStatus> getBranchStatuses() {
+        return List.of(BranchStatus.values());
     }
 
     /**

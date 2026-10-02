@@ -63,4 +63,11 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long>, Jpa
            "JOIN FETCH i.book b " +
            "WHERE i.branch.id = :branchId AND i.id IN :ids")
     List<Inventory> findAllByBranchIdAndIdInWithBook(@Param("branchId") Long branchId, @Param("ids") Collection<Long> ids);
+
+    /**
+     * Xóa toàn bộ bản ghi tồn kho của một đầu sách (dùng khi xóa sách).
+     *
+     * @param bookId ID cuốn sách
+     */
+    void deleteAllByBookId(Long bookId);
 }

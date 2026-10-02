@@ -32,4 +32,14 @@ public class UserUpdateRequestForm {
     private String address;
 
     private String status;
+
+    /**
+     * Vai trò mới của người dùng (ADMIN, BRANCHMANAGER, STAFF, CUSTOMER)
+     */
+    private String role;
+
+    /**
+     * ID chi nhánh mới trực thuộc của người dùng
+     */
+    private Long branchId;
 }

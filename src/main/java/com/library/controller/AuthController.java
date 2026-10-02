@@ -46,7 +46,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-                .body(ApiResponse.success("Đăng nhập thành công!", null));
+                .body(ApiResponse.success("Đăng nhập thành công!", responseDto));
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.library.service;
 
 import com.library.dto.borrow.BorrowSlipResponseDto;
+import com.library.enums.BorrowStatus;
 import com.library.requestform.borrow.BorrowSlipCreateRequestForm;
 import com.library.requestform.borrow.BorrowSlipFilterRequestForm;
 import org.springframework.data.domain.Page;
@@ -53,4 +54,24 @@ public interface BorrowSlipService {
      * @return DTO thông tin phiếu mượn sau khi hủy
      */
     BorrowSlipResponseDto cancelBorrowSlip(Long id);
+
+    /**
+     * Cập nhật trạng thái của phiếu mượn sách dành cho Admin (BORROWED, RETURNED, OVERDUE, CANCELLED).
+     * Tự động hoàn trả tồn kho sách khi chuyển sang RETURNED hoặc CANCELLED.
+     *
+     * @param id     ID của phiếu mượn cần cập nhật
+     * @param status Trạng thái mới của phiếu mượn
+     * @return DTO thông tin phiếu mượn sau khi cập nhật
+     */
+    BorrowSlipResponseDto updateBorrowSlipStatus(Long id, BorrowStatus status);
+
+    /**
+     * Cập nhật trạng thái của phiếu mượn sách tại chi nhánh của nhân viên/quản lý đang đăng nhập.
+     * Kiểm tra chi nhánh của tài khoản hiện tại phải khớp với chi nhánh của phiếu mượn.
+     *
+     * @param id     ID của phiếu mượn cần cập nhật
+     * @param status Trạng thái mới của phiếu mượn
+     * @return DTO thông tin phiếu mượn sau khi cập nhật
+     */
+    BorrowSlipResponseDto updateBorrowSlipStatusForBranch(Long id, BorrowStatus status);
 }

@@ -46,6 +46,11 @@ public final class BookSpecification {
                 predicates.add(cb.equal(root.get("status"), filter.getStatus()));
             }
 
+            // Bước 2.1: Lọc theo thể loại sách (categoryId)
+            if (filter.getCategoryId() != null) {
+                predicates.add(cb.equal(root.get("category").get("id"), filter.getCategoryId()));
+            }
+
             // Bước 3: Lọc theo mã ISBN (tìm kiếm chứa / gần đúng không phân biệt hoa thường)
             if (filter.getIsbn() != null && !filter.getIsbn().trim().isEmpty()) {
                 predicates.add(cb.like(
@@ -62,7 +67,28 @@ public final class BookSpecification {
                 ));
             }
 
-            // Bước 5: Lọc theo khoảng năm xuất bản
+            // Bước 4.1: Lọc theo tác giả sách (tìm kiếm chứa / gần đúng không phân biệt hoa thường)
+            if (filter.getAuthor() != null && !filter.getAuthor().trim().isEmpty()) {
+                predicates.add(cb.like(
+                        cb.lower(root.get("author")),
+                        "%" + filter.getAuthor().trim().toLowerCase() + "%"
+                ));
+            }
+
+            // Bước 4.2: Lọc theo nhà xuất bản (tìm kiếm chứa / gần đúng không phân biệt hoa thường)
+            if (filter.getPublisher() != null && !filter.getPublisher().trim().isEmpty()) {
+                predicates.add(cb.like(
+                        cb.lower(root.get("publisher")),
+                        "%" + filter.getPublisher().trim().toLowerCase() + "%"
+                ));
+            }
+
+            // Bước 5: Lọc theo năm xuất bản chính xác
+            if (filter.getPublicationYear() != null) {
+                predicates.add(cb.equal(root.get("publicationYear"), filter.getPublicationYear()));
+            }
+
+            // Bước 5.1: Lọc theo khoảng năm xuất bản
             if (filter.getPublicationYearFrom() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("publicationYear"), filter.getPublicationYearFrom()));
             }

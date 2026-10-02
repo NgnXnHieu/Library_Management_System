@@ -2,15 +2,23 @@ package com.library.service.impl;
 
 import com.library.dto.category.CategoryResponseDto;
 import com.library.entity.Category;
+import com.library.enums.DisplayStatus;
 import com.library.exception.AppException;
 import com.library.exception.ErrorCode;
 import com.library.mapper.CategoryMapper;
 import com.library.repository.BookRepository;
 import com.library.repository.CategoryRepository;
 import com.library.requestform.category.CategoryCreateRequestForm;
+import com.library.requestform.category.CategoryFilterRequestForm;
 import com.library.requestform.category.CategoryUpdateRequestForm;
 import com.library.service.CategoryService;
+import com.library.specification.CategorySpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -148,5 +156,47 @@ public class CategoryServiceImpl implements CategoryService {
 
         // Bước 2: Chuyển đổi sang danh sách DTO và trả về
         return categoryMapper.toDtoList(categories);
+    }
+
+    /**
+     * Lấy danh sách phân trang các thể loại kèm theo bộ lọc tìm kiếm và sắp xếp (Dành cho ADMIN).
+     * Mặc định sắp xếp theo createdAt với thời gian tạo mới nhất lên đầu (DESC).
+     *
+     * @param filter Bộ lọc tìm kiếm và thông tin phân trang (name, description, status, page, size, sortBy, sortDir)
+     * @return Trang kết quả chứa danh sách CategoryResponseDto
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CategoryResponseDto> getCategoriesWithFilter(CategoryFilterRequestForm filter) {
+        // Bước 1: Xây dựng tiêu chí lọc Specification từ form yêu cầu
+        Specification<Category> spec = CategorySpecification.filter(filter);
+
+        // Bước 2: Xử lý hướng sắp xếp (mặc định createdAt DESC)
+        Sort.Direction direction = (filter.getSortDir() != null && "asc".equalsIgnoreCase(filter.getSortDir().trim()))
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+        String sortByField = (filter.getSortBy() != null && !filter.getSortBy().trim().isEmpty())
+                ? filter.getSortBy().trim()
+                : "createdAt";
+        Sort sort = Sort.by(direction, sortByField);
+
+        // Bước 3: Tạo đối tượng phân trang Pageable (page bắt đầu từ 0)
+        Pageable pageable = PageRequest.of(filter.getPage(), filter.getSize(), sort);
+
+        // Bước 4: Thực hiện truy vấn phân trang qua CategoryRepository
+        Page<Category> categoryPage = categoryRepository.findAll(spec, pageable);
+
+        // Bước 5: Chuyển đổi sang Page DTO qua CategoryMapper
+        return categoryPage.map(categoryMapper::toDto);
+    }
+
+    /**
+     * Lấy danh sách toàn bộ các giá trị enum trạng thái hiển thị của thể loại (DisplayStatus: HIDE, UNHIDE).
+     *
+     * @return Danh sách các enum DisplayStatus
+     */
+    @Override
+    public List<DisplayStatus> getDisplayStatuses() {
+        return List.of(DisplayStatus.values());
     }
 }

@@ -2,16 +2,20 @@ package com.library.controller;
 
 import com.library.dto.ApiResponse;
 import com.library.dto.category.CategoryResponseDto;
+import com.library.enums.DisplayStatus;
 import com.library.requestform.category.CategoryCreateRequestForm;
+import com.library.requestform.category.CategoryFilterRequestForm;
 import com.library.requestform.category.CategoryUpdateRequestForm;
 import com.library.service.CategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -95,5 +99,37 @@ public class CategoryController {
     public ResponseEntity<ApiResponse<CategoryResponseDto>> getCategoryById(@PathVariable Long id) {
         CategoryResponseDto category = categoryService.getCategoryById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin thể loại thành công!", category));
+    }
+
+    /**
+     * API lấy danh sách phân trang các thể loại kèm bộ lọc tìm kiếm và sắp xếp (Dành riêng cho ADMIN).
+     * Mặc định sắp xếp theo createdAt với thời gian mới nhất lên đầu (DESC).
+     *
+     * @param filter Bộ lọc tìm kiếm và tham số phân trang nhận qua Query Parameters
+     * @return Trang kết quả chứa danh sách DTO thể loại bọc trong ApiResponse với HTTP 200 OK
+     */
+    @GetMapping("/admin/categories")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Page<CategoryResponseDto>>> getCategoriesPage(
+            @Valid @ModelAttribute CategoryFilterRequestForm filter) {
+        // Bước 1: Gọi tầng Service xử lý truy vấn phân trang qua Specification
+        Page<CategoryResponseDto> result = categoryService.getCategoriesWithFilter(filter);
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách thể loại phân trang thành công!", result));
+    }
+
+    /**
+     * API công khai lấy danh sách toàn bộ các giá trị trạng thái hiển thị của thể loại (Không cần đăng nhập, tiền tố /public).
+     *
+     * @return Danh sách các enum DisplayStatus (HIDE, UNHIDE) bọc trong chuẩn ApiResponse
+     */
+    @GetMapping("/public/categories/statuses")
+    public ResponseEntity<ApiResponse<List<DisplayStatus>>> getCategoryStatuses() {
+        // Bước 1: Gọi tầng Service lấy danh sách các trạng thái hiển thị
+        List<DisplayStatus> statuses = categoryService.getDisplayStatuses();
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách trạng thái thể loại thành công!", statuses));
     }
 }

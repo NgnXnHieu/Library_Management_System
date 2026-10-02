@@ -2,15 +2,17 @@ package com.library.repository;
 
 import com.library.entity.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 /**
  * Repository thao tác với bảng categories trong Database.
+ * Kế thừa JpaSpecificationExecutor để hỗ trợ phân trang và lọc động qua JPA Criteria.
  */
 @Repository
-public interface CategoryRepository extends JpaRepository<Category, Long> {
+public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSpecificationExecutor<Category> {
 
     /**
      * Tìm thể loại theo tên.

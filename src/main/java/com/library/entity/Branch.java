@@ -39,6 +39,9 @@ public class Branch extends BaseEntity {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    @Column(name = "image_url", length = 255)
+    private String imageUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
     private BranchStatus status;

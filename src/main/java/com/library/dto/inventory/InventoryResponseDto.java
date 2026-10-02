@@ -27,6 +27,7 @@ public class InventoryResponseDto {
     private Long bookId;
     private String bookTitle;
     private String isbn;
+    private String coverImageUrl;
     private BigDecimal price;
     private BigDecimal rentalPrice;
     private BigDecimal fineAmount;

@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -60,6 +61,20 @@ public class BookController {
     }
 
     /**
+     * API lấy danh sách phân trang các đầu sách với bộ lọc đầy đủ (Chỉ dành cho ADMIN).
+     *
+     * @param filter Bộ lọc tìm kiếm và phân trang
+     * @return Danh sách đầu sách phân trang bọc trong ApiResponse
+     */
+    @GetMapping("/admin/books")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Page<BookResponseDto>>> getAdminBooks(
+            @ModelAttribute BookFilterRequestForm filter) {
+        Page<BookResponseDto> books = bookService.getBooksWithFilter(filter);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đầu sách cho quản trị viên thành công!", books));
+    }
+
+    /**
      * API cập nhật thông tin đầu sách theo ID (Chỉ dành cho ADMIN).
      * Cho phép cập nhật từng phần (partial update) - các trường không truyền (null) sẽ được giữ nguyên.
      *
@@ -74,5 +89,18 @@ public class BookController {
             @Valid @RequestBody BookUpdateRequestForm form) {
         BookResponseDto updatedBook = bookService.updateBook(id, form);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin sách thành công!", updatedBook));
+    }
+
+    /**
+     * API xóa đầu sách khỏi hệ thống (Chỉ dành cho ADMIN).
+     *
+     * @param id ID của đầu sách cần xóa
+     * @return Thông báo kết quả bọc trong ApiResponse
+     */
+    @DeleteMapping("/books/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteBook(@PathVariable Long id) {
+        bookService.deleteBook(id);
+        return ResponseEntity.ok(ApiResponse.success("Xóa đầu sách thành công!", null));
     }
 }

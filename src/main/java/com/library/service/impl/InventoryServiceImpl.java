@@ -8,11 +8,14 @@ import com.library.enums.DisplayStatus;
 import com.library.exception.AppException;
 import com.library.exception.BadRequestException;
 import com.library.exception.ErrorCode;
+import com.library.exception.ResourceNotFoundException;
 import com.library.mapper.InventoryMapper;
 import com.library.repository.BookRepository;
 import com.library.repository.BranchRepository;
 import com.library.repository.InventoryRepository;
 import com.library.requestform.inventory.InventoryFilterRequestForm;
+import com.library.requestform.inventory.InventoryImportRequestForm;
+import com.library.requestform.inventory.InventoryUpdateRequestForm;
 import com.library.service.InventoryService;
 import com.library.specification.InventorySpecification;
 import com.library.util.SecurityUtil;
@@ -163,5 +166,88 @@ public class InventoryServiceImpl implements InventoryService {
 
         // Bước 3: Tái sử dụng logic truy vấn phân trang và tìm kiếm tồn kho đã tối ưu
         return getAllInventories(filter);
+    }
+
+    /**
+     * Cập nhật thông tin bản ghi tồn kho (vị trí kệ, trạng thái hiển thị).
+     *
+     * @param id   ID bản ghi tồn kho
+     * @param form Dữ liệu cập nhật
+     * @return DTO tồn kho sau khi cập nhật
+     */
+    @Override
+    @Transactional
+    public InventoryResponseDto updateInventory(Long id, InventoryUpdateRequestForm form) {
+        // Bước 1: Tìm bản ghi tồn kho theo ID
+        Inventory inventory = inventoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi tồn kho với ID: " + id));
+
+        // Bước 2: Cập nhật vị trí kệ nếu có truyền vào
+        if (form.getShelfLocation() != null) {
+            inventory.setShelfLocation(form.getShelfLocation().trim());
+        }
+
+        // Bước 3: Cập nhật trạng thái hiển thị nếu có truyền vào
+        if (form.getStatus() != null) {
+            inventory.setStatus(form.getStatus());
+        }
+
+        // Bước 4: Lưu vào cơ sở dữ liệu và trả về DTO
+        Inventory savedInventory = inventoryRepository.save(inventory);
+        return inventoryMapper.toDto(savedInventory);
+    }
+
+    /**
+     * Thay đổi trạng thái hiển thị của bản ghi tồn kho (HIDE / UNHIDE).
+     *
+     * @param id     ID bản ghi tồn kho
+     * @param status Trạng thái mới
+     * @return DTO tồn kho sau khi đổi trạng thái
+     */
+    @Override
+    @Transactional
+    public InventoryResponseDto changeInventoryStatus(Long id, DisplayStatus status) {
+        // Bước 1: Tìm bản ghi tồn kho theo ID
+        Inventory inventory = inventoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi tồn kho với ID: " + id));
+
+        // Bước 2: Gán trạng thái mới
+        inventory.setStatus(status != null ? status : DisplayStatus.UNHIDE);
+
+        // Bước 3: Lưu và trả về kết quả
+        Inventory savedInventory = inventoryRepository.save(inventory);
+        return inventoryMapper.toDto(savedInventory);
+    }
+
+    /**
+     * Nhập thêm số lượng sách vào kho chi nhánh.
+     * Tự động cộng dồn số lượng vào cả tổng số lượng (totalQuantity) và số lượng khả dụng (availableQuantity).
+     *
+     * @param id   ID bản ghi tồn kho
+     * @param form Form chứa số lượng nhập thêm
+     * @return DTO tồn kho sau khi nhập thêm
+     */
+    @Override
+    @Transactional
+    public InventoryResponseDto importStock(Long id, InventoryImportRequestForm form) {
+        // Bước 1: Tìm bản ghi tồn kho theo ID
+        Inventory inventory = inventoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi tồn kho với ID: " + id));
+
+        // Bước 2: Kiểm tra số lượng nhập hợp lệ
+        if (form.getQuantity() == null || form.getQuantity() <= 0) {
+            throw new BadRequestException("Số lượng nhập kho phải lớn hơn 0!");
+        }
+
+        // Bước 3: Cộng dồn số lượng vào tổng số lượng (totalQuantity) và số lượng khả dụng (availableQuantity)
+        int currentTotal = inventory.getTotalQuantity() != null ? inventory.getTotalQuantity() : 0;
+        int currentAvailable = inventory.getAvailableQuantity() != null ? inventory.getAvailableQuantity() : 0;
+
+        inventory.setTotalQuantity(currentTotal + form.getQuantity());
+        inventory.setAvailableQuantity(currentAvailable + form.getQuantity());
+
+        // Bước 4: Lưu vào cơ sở dữ liệu và trả về DTO
+        Inventory savedInventory = inventoryRepository.save(inventory);
+        return inventoryMapper.toDto(savedInventory);
     }
 }

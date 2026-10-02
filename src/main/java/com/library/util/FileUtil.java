@@ -84,13 +84,34 @@ public final class FileUtil {
     }
 
     /**
-     * Xóa file khỏi ổ đĩa theo fileKey.
+     * Bóc tách fileKey tương đối từ đường dẫn URL hoặc fileKey.
+     * Ví dụ: "/api/uploads/branches/uuid.jpg" -> "branches/uuid.jpg"
+     *        "uploads/branches/uuid.jpg" -> "branches/uuid.jpg"
+     *        "branches/uuid.jpg" -> "branches/uuid.jpg"
+     */
+    public static String extractFileKey(String urlOrKey) {
+        if (urlOrKey == null || urlOrKey.trim().isEmpty()) {
+            return null;
+        }
+        String cleaned = urlOrKey.trim();
+        if (cleaned.startsWith("/api/uploads/")) {
+            return cleaned.substring("/api/uploads/".length());
+        }
+        if (cleaned.startsWith("uploads/")) {
+            return cleaned.substring("uploads/".length());
+        }
+        return cleaned;
+    }
+
+    /**
+     * Xóa file khỏi ổ đĩa theo fileKey hoặc đường dẫn URL.
      *
-     * @param fileKey Khóa file tương đối (ví dụ: "books/uuid.jpg")
+     * @param fileKeyOrUrl Khóa file tương đối (ví dụ: "branches/uuid.jpg") hoặc URL ("/api/uploads/branches/uuid.jpg")
      * @return true nếu xóa thành công hoặc file không tồn tại, ngược lại false
      */
-    public static boolean deleteFile(String fileKey) {
-        if (fileKey == null || fileKey.trim().isEmpty()) {
+    public static boolean deleteFile(String fileKeyOrUrl) {
+        String fileKey = extractFileKey(fileKeyOrUrl);
+        if (fileKey == null || fileKey.isEmpty()) {
             return false;
         }
         try {
@@ -102,15 +123,20 @@ public final class FileUtil {
     }
 
     /**
-     * Tạo URL xem ảnh đầy đủ từ fileKey.
+     * Tạo URL xem ảnh đầy đủ từ fileKey hoặc giữ nguyên nếu đã là URL hợp lệ.
      *
-     * @param fileKey Khóa file tương đối
-     * @return Đường dẫn URL để client truy cập ảnh (ví dụ: "/api/uploads/books/uuid.jpg")
+     * @param fileKeyOrUrl Khóa file tương đối hoặc đường dẫn URL
+     * @return Đường dẫn URL để client truy cập ảnh (ví dụ: "/api/uploads/branches/uuid.jpg")
      */
-    public static String buildFileUrl(String fileKey) {
-        if (fileKey == null || fileKey.trim().isEmpty()) {
+    public static String buildFileUrl(String fileKeyOrUrl) {
+        if (fileKeyOrUrl == null || fileKeyOrUrl.trim().isEmpty()) {
             return null;
         }
+        String cleaned = fileKeyOrUrl.trim();
+        if (cleaned.startsWith("http://") || cleaned.startsWith("https://") || cleaned.startsWith("/api/uploads/")) {
+            return cleaned;
+        }
+        String fileKey = extractFileKey(cleaned);
         return "/api/uploads/" + fileKey;
     }
 

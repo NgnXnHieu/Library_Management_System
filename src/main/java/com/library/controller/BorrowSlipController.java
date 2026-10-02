@@ -2,6 +2,7 @@ package com.library.controller;
 
 import com.library.dto.ApiResponse;
 import com.library.dto.borrow.BorrowSlipResponseDto;
+import com.library.enums.BorrowStatus;
 import com.library.requestform.borrow.BorrowSlipCreateRequestForm;
 import com.library.requestform.borrow.BorrowSlipFilterRequestForm;
 import com.library.service.BorrowSlipService;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -110,5 +112,47 @@ public class BorrowSlipController {
 
         // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
         return ResponseEntity.ok(ApiResponse.success("Hủy phiếu mượn sách thành công!", result));
+    }
+
+    /**
+     * API cập nhật trạng thái phiếu mượn sách.
+     * Tự động hoàn trả tồn kho nếu chuyển sang RETURNED hoặc CANCELLED.
+     * Dành riêng cho ADMIN.
+     *
+     * @param id     ID của phiếu mượn cần cập nhật
+     * @param status Trạng thái mới của phiếu mượn (BORROWED, RETURNED, OVERDUE, CANCELLED)
+     * @return DTO thông tin phiếu mượn sau khi cập nhật bọc trong chuẩn ApiResponse với HTTP 200 OK
+     */
+    @PutMapping("/admin/borrow-slips/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<BorrowSlipResponseDto>> updateBorrowSlipStatus(
+            @PathVariable Long id,
+            @RequestParam BorrowStatus status) {
+        // Bước 1: Gọi tầng Service xử lý nghiệp vụ cập nhật trạng thái
+        BorrowSlipResponseDto result = borrowSlipService.updateBorrowSlipStatus(id, status);
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái phiếu mượn thành công!", result));
+    }
+
+    /**
+     * API cập nhật trạng thái phiếu mượn sách tại chi nhánh của nhân viên/quản lý đang đăng nhập.
+     * Kiểm tra nghiêm ngặt branchId của tài khoản phải trùng với branchId của phiếu mượn.
+     * Dành riêng cho STAFF và BRANCHMANAGER.
+     *
+     * @param id     ID của phiếu mượn cần cập nhật
+     * @param status Trạng thái mới của phiếu mượn (BORROWED, RETURNED, OVERDUE, CANCELLED)
+     * @return DTO thông tin phiếu mượn sau khi cập nhật bọc trong chuẩn ApiResponse với HTTP 200 OK
+     */
+    @PutMapping("/borrow-slips/{id}/status")
+    @PreAuthorize("hasAnyRole('BRANCHMANAGER', 'STAFF')")
+    public ResponseEntity<ApiResponse<BorrowSlipResponseDto>> updateBorrowSlipStatusForBranch(
+            @PathVariable Long id,
+            @RequestParam BorrowStatus status) {
+        // Bước 1: Gọi tầng Service xử lý cập nhật trạng thái kèm kiểm tra chi nhánh
+        BorrowSlipResponseDto result = borrowSlipService.updateBorrowSlipStatusForBranch(id, status);
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái phiếu mượn thành công!", result));
     }
 }

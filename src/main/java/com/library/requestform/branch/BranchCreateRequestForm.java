@@ -40,4 +40,7 @@ public class BranchCreateRequestForm {
 
     @Pattern(regexp = "^$|^[0-9]{10,11}$", message = "Số điện thoại phải từ 10 đến 11 chữ số")
     private String phone;
+
+    @Size(max = 255, message = "Đường dẫn ảnh tối đa 255 ký tự")
+    private String imageUrl;
 }

@@ -19,4 +19,12 @@ public interface BorrowItemRepository extends JpaRepository<BorrowItem, Long> {
      * @return Danh sách chi tiết mượn sách
      */
     List<BorrowItem> findAllByBorrowSlipId(Long borrowSlipId);
+
+    /**
+     * Kiểm tra xem cuốn sách đã từng phát sinh trong chi tiết mượn nào chưa.
+     *
+     * @param bookId ID cuốn sách
+     * @return true nếu đã có trong chi tiết mượn, ngược lại false
+     */
+    boolean existsByInventoryBookId(Long bookId);
 }

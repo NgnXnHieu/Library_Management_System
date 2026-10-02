@@ -430,6 +430,149 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
     }
 
     /**
+     * Cập nhật trạng thái phiếu mượn sách dành riêng cho Admin (BORROWED, RETURNED, OVERDUE, CANCELLED).
+     * Tự động hoàn trả tồn kho sách khi chuyển sang RETURNED hoặc CANCELLED.
+     * Quản lý giao dịch với @Transactional để bảo đảm tính toàn vẹn dữ liệu.
+     *
+     * @param id     ID của phiếu mượn cần cập nhật
+     * @param status Trạng thái mới của phiếu mượn
+     * @return DTO thông tin phiếu mượn sau khi cập nhật
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BorrowSlipResponseDto updateBorrowSlipStatus(Long id, BorrowStatus status) {
+        // Bước 1: Kiểm tra dữ liệu đầu vào
+        if (status == null) {
+            throw new BadRequestException("Trạng thái mới không được để trống!");
+        }
+
+        // Bước 2: Kiểm tra phiếu mượn có tồn tại hay không
+        BorrowSlip borrowSlip = borrowSlipRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn với ID: " + id));
+
+        BorrowStatus oldStatus = borrowSlip.getStatus();
+        if (oldStatus == status) {
+            // Không thay đổi trạng thái, trả về thông tin hiện tại
+            return borrowSlipMapper.toDto(borrowSlip);
+        }
+
+        // Bước 3: Xử lý theo từng trạng thái mới được chọn
+        switch (status) {
+            case RETURNED -> {
+                // Chỉ cho phép chuyển sang RETURNED từ BORROWED hoặc OVERDUE
+                if (oldStatus == BorrowStatus.CANCELLED) {
+                    throw new BadRequestException("Phiếu mượn đã bị hủy, không thể chuyển sang trạng thái Đã trả!");
+                }
+                // Ghi nhận thời điểm hoàn trả nếu chưa có
+                if (borrowSlip.getReturnedAt() == null) {
+                    borrowSlip.setReturnedAt(LocalDateTime.now());
+                }
+                // Hoàn trả số lượng sách về kho của chi nhánh
+                restoreSlipInventories(borrowSlip);
+                borrowSlip.setStatus(BorrowStatus.RETURNED);
+            }
+            case CANCELLED -> {
+                // Chỉ cho phép hủy khi đang BORROWED hoặc OVERDUE
+                if (oldStatus == BorrowStatus.RETURNED) {
+                    throw new BadRequestException("Phiếu mượn đã được hoàn trả sách, không thể hủy!");
+                }
+                // Hoàn trả số lượng sách về kho của chi nhánh
+                restoreSlipInventories(borrowSlip);
+
+                // Cập nhật trạng thái thanh toán và các payment liên quan
+                List<Payment> rentalPayments = paymentRepository.findByBorrowSlipIdAndPaymentPurpose(id, PaymentPurpose.RENTAL_FEE);
+                for (Payment payment : rentalPayments) {
+                    if (payment.getPaymentMethod() == PaymentMethod.CASH && payment.getStatus() == PaymentStatus.PAID) {
+                        payment.setStatus(PaymentStatus.REFUNDED);
+                    } else if (payment.getStatus() == PaymentStatus.UNPAID) {
+                        payment.setStatus(PaymentStatus.CANCELLED);
+                    }
+                }
+                if (!rentalPayments.isEmpty()) {
+                    paymentRepository.saveAll(rentalPayments);
+                }
+
+                if (borrowSlip.getPaymentStatus() == PaymentStatus.PAID) {
+                    borrowSlip.setPaymentStatus(PaymentStatus.REFUNDED);
+                } else {
+                    borrowSlip.setPaymentStatus(PaymentStatus.CANCELLED);
+                }
+
+                borrowSlip.setStatus(BorrowStatus.CANCELLED);
+            }
+            case OVERDUE -> {
+                // Chỉ cho phép chuyển sang OVERDUE nếu đang BORROWED
+                if (oldStatus == BorrowStatus.RETURNED || oldStatus == BorrowStatus.CANCELLED) {
+                    throw new BadRequestException("Phiếu mượn đã hoàn tất hoặc bị hủy, không thể đánh dấu Quá hạn!");
+                }
+                borrowSlip.setStatus(BorrowStatus.OVERDUE);
+            }
+            case BORROWED -> {
+                // Cho phép khôi phục từ OVERDUE về BORROWED
+                if (oldStatus == BorrowStatus.RETURNED || oldStatus == BorrowStatus.CANCELLED) {
+                    throw new BadRequestException("Phiếu mượn đã hoàn tất hoặc bị hủy, không thể chuyển ngược lại Đang mượn!");
+                }
+                borrowSlip.setStatus(BorrowStatus.BORROWED);
+            }
+        }
+
+        // Bước 4: Lưu thông tin phiếu mượn và trả về DTO
+        BorrowSlip updatedBorrowSlip = borrowSlipRepository.save(borrowSlip);
+        return borrowSlipMapper.toDto(updatedBorrowSlip);
+    }
+
+    /**
+     * Cập nhật trạng thái phiếu mượn sách tại chi nhánh của nhân viên/quản lý đang đăng nhập.
+     * Kiểm tra chi nhánh của tài khoản hiện tại phải khớp với chi nhánh của phiếu mượn.
+     * Áp dụng @Transactional để đảm bảo toàn vẹn dữ liệu.
+     *
+     * @param id     ID của phiếu mượn cần cập nhật
+     * @param status Trạng thái mới của phiếu mượn (BORROWED, RETURNED, OVERDUE, CANCELLED)
+     * @return DTO thông tin phiếu mượn sau khi cập nhật
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BorrowSlipResponseDto updateBorrowSlipStatusForBranch(Long id, BorrowStatus status) {
+        // Bước 1: Kiểm tra dữ liệu đầu vào
+        if (status == null) {
+            throw new BadRequestException("Trạng thái mới không được để trống!");
+        }
+
+        // Bước 2: Kiểm tra phiếu mượn có tồn tại hay không
+        BorrowSlip borrowSlip = borrowSlipRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn với ID: " + id));
+
+        // Bước 3: Trích xuất branchId của tài khoản nhân viên/quản lý đang đăng nhập từ SecurityContextHolder
+        Long currentBranchId = SecurityUtil.getCurrentBranchId()
+                .orElseThrow(() -> new BadRequestException("Tài khoản chưa được gán chi nhánh hoạt động!"));
+
+        // Bước 4: Kiểm tra chi nhánh của tài khoản có trùng khớp với chi nhánh của phiếu mượn không
+        if (borrowSlip.getBranch() == null || !borrowSlip.getBranch().getId().equals(currentBranchId)) {
+            throw new BadRequestException("Bạn không có quyền cập nhật phiếu mượn của chi nhánh khác!");
+        }
+
+        // Bước 5: Tái sử dụng logic cập nhật trạng thái phiếu mượn
+        return updateBorrowSlipStatus(id, status);
+    }
+
+    /**
+     * Hàm phụ trợ gom danh sách inventoryId và số lượng để hoàn trả kho từ phiếu mượn.
+     *
+     * @param borrowSlip Phiếu mượn cần hoàn trả sách về kho
+     */
+    private void restoreSlipInventories(BorrowSlip borrowSlip) {
+        Map<Long, Integer> inventoryQuantityMap = new LinkedHashMap<>();
+        if (borrowSlip.getBorrowItems() != null) {
+            for (BorrowItem item : borrowSlip.getBorrowItems()) {
+                if (item.getInventory() != null && item.getQuantity() != null && item.getQuantity() > 0) {
+                    inventoryQuantityMap.merge(item.getInventory().getId(), item.getQuantity(), Integer::sum);
+                }
+            }
+        }
+        restoreInventoryQuantities(inventoryQuantityMap);
+    }
+
+    /**
      * Hàm phụ trợ cộng ngược số lượng sách về tồn kho (inventories) tương ứng.
      * Sử dụng 1 lệnh truy vấn findAllById duy nhất để lấy toàn bộ invent ories cần
      * cập nhật (tránh N+1 query).

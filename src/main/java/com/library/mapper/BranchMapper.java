@@ -4,9 +4,12 @@ import com.library.dto.branch.BranchResponseDto;
 import com.library.entity.Branch;
 import com.library.requestform.branch.BranchCreateRequestForm;
 import com.library.requestform.branch.BranchUpdateRequestForm;
+import com.library.util.FileUtil;
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.Named;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 import org.mapstruct.ReportingPolicy;
 
@@ -31,6 +34,7 @@ public interface BranchMapper {
     /**
      * Map từ Entity Branch sang DTO BranchResponseDto
      */
+    @Mapping(target = "imageUrl", source = "imageUrl", qualifiedByName = "mapImageUrl")
     BranchResponseDto toDto(Branch branch);
 
     /**
@@ -43,4 +47,9 @@ public interface BranchMapper {
      * Các trường null trong form sẽ tự động được bỏ qua
      */
     void updateEntityFromForm(BranchUpdateRequestForm form, @MappingTarget Branch branch);
+
+    @Named("mapImageUrl")
+    default String mapImageUrl(String imageUrl) {
+        return FileUtil.buildFileUrl(imageUrl);
+    }
 }

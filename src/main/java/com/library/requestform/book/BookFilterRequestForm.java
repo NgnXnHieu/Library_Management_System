@@ -25,6 +25,11 @@ public class BookFilterRequestForm {
     private DisplayStatus status;
 
     /**
+     * Lọc theo thể loại sách (categoryId)
+     */
+    private Long categoryId;
+
+    /**
      * Lọc theo mã ISBN (tìm kiếm gần đúng / chứa)
      */
     private String isbn;
@@ -33,6 +38,21 @@ public class BookFilterRequestForm {
      * Lọc theo tiêu đề sách (tìm kiếm gần đúng / không phân biệt hoa thường)
      */
     private String title;
+
+    /**
+     * Lọc theo tác giả sách (tìm kiếm gần đúng / không phân biệt hoa thường)
+     */
+    private String author;
+
+    /**
+     * Lọc theo nhà xuất bản (tìm kiếm gần đúng / không phân biệt hoa thường)
+     */
+    private String publisher;
+
+    /**
+     * Lọc chính xác theo năm xuất bản
+     */
+    private Integer publicationYear;
 
     /**
      * Khoảng năm xuất bản: từ năm

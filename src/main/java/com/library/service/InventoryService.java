@@ -1,7 +1,10 @@
 package com.library.service;
 
 import com.library.dto.inventory.InventoryResponseDto;
+import com.library.enums.DisplayStatus;
 import com.library.requestform.inventory.InventoryFilterRequestForm;
+import com.library.requestform.inventory.InventoryImportRequestForm;
+import com.library.requestform.inventory.InventoryUpdateRequestForm;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
@@ -40,4 +43,32 @@ public interface InventoryService {
      *         viên
      */
     Page<InventoryResponseDto> getInventoriesByCurrentStaffBranch(InventoryFilterRequestForm filter);
+
+    /**
+     * Cập nhật thông tin bản ghi tồn kho (vị trí kệ, trạng thái hiển thị).
+     *
+     * @param id   ID bản ghi tồn kho
+     * @param form Dữ liệu cập nhật
+     * @return DTO tồn kho sau khi cập nhật
+     */
+    InventoryResponseDto updateInventory(Long id, InventoryUpdateRequestForm form);
+
+    /**
+     * Thay đổi trạng thái hiển thị của bản ghi tồn kho (HIDE / UNHIDE).
+     *
+     * @param id     ID bản ghi tồn kho
+     * @param status Trạng thái mới
+     * @return DTO tồn kho sau khi đổi trạng thái
+     */
+    InventoryResponseDto changeInventoryStatus(Long id, DisplayStatus status);
+
+    /**
+     * Nhập thêm số lượng sách vào kho chi nhánh.
+     * Tự động cộng dồn số lượng vào cả tổng số lượng (totalQuantity) và số lượng khả dụng (availableQuantity).
+     *
+     * @param id   ID bản ghi tồn kho
+     * @param form Form chứa số lượng nhập thêm
+     * @return DTO tồn kho sau khi nhập thêm
+     */
+    InventoryResponseDto importStock(Long id, InventoryImportRequestForm form);
 }

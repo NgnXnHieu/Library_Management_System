@@ -1,8 +1,11 @@
 package com.library.service;
 
 import com.library.dto.category.CategoryResponseDto;
+import com.library.enums.DisplayStatus;
 import com.library.requestform.category.CategoryCreateRequestForm;
+import com.library.requestform.category.CategoryFilterRequestForm;
 import com.library.requestform.category.CategoryUpdateRequestForm;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 
@@ -49,4 +52,19 @@ public interface CategoryService {
      * @return Danh sách DTO các thể loại
      */
     List<CategoryResponseDto> getAllCategories();
+
+    /**
+     * Lấy danh sách phân trang các thể loại kèm theo bộ lọc tìm kiếm và sắp xếp (Dành cho ADMIN).
+     *
+     * @param filter Bộ lọc tìm kiếm và thông tin phân trang (name, description, status, page, size, sortBy, sortDir)
+     * @return Trang kết quả chứa danh sách CategoryResponseDto
+     */
+    Page<CategoryResponseDto> getCategoriesWithFilter(CategoryFilterRequestForm filter);
+
+    /**
+     * Lấy danh sách toàn bộ các giá trị enum trạng thái hiển thị của thể loại (DisplayStatus: HIDE, UNHIDE).
+     *
+     * @return Danh sách các enum DisplayStatus
+     */
+    List<DisplayStatus> getDisplayStatuses();
 }

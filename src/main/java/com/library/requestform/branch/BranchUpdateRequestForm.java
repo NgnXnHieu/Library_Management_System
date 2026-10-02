@@ -33,4 +33,7 @@ public class BranchUpdateRequestForm {
     private String phone;
 
     private BranchStatus status;
+ 
+    @Size(max = 255, message = "Đường dẫn ảnh tối đa 255 ký tự")
+    private String imageUrl;
 }

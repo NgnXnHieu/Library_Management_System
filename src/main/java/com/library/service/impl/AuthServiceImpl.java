@@ -118,10 +118,22 @@ public class AuthServiceImpl implements AuthService {
         account.setRefreshToken(refreshToken);
         accountRepository.save(account);
 
-        // 6. Trả về thông tin accessToken và refreshToken
+        // 6. Trích xuất Role và họ tên của User để trả về cho Frontend
+        String roleCode = "ROLE_CUSTOMER";
+        if (user != null && user.getRole() != null && user.getRole().getCode() != null) {
+            String code = user.getRole().getCode().trim().toUpperCase();
+            roleCode = code.startsWith("ROLE_") ? code : "ROLE_" + code;
+        }
+
+        String fullName = (user != null && user.getFullName() != null) ? user.getFullName() : account.getUsername();
+
+        // 7. Trả về thông tin đăng nhập: username, fullName, role và token (dùng cho Cookie)
         return LoginResponseDto.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .username(account.getUsername())
+                .fullName(fullName)
+                .role(roleCode)
                 .build();
     }
 
