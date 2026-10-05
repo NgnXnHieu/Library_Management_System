@@ -2,10 +2,12 @@ package com.library.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.dto.role.RoleResponseDto;
+import com.library.exception.AppException;
 import com.library.exception.BadRequestException;
-import com.library.exception.ResourceNotFoundException;
+import com.library.exception.ErrorCode;
 import com.library.requestform.role.RoleCreateRequestForm;
 import com.library.requestform.role.RoleUpdateRequestForm;
+import com.library.security.JwtAuthenticationFilter;
 import com.library.service.RoleService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +45,9 @@ class RoleControllerTest {
 
     @MockBean
     private RoleService roleService;
+
+    @MockBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Test
     void testCreateRoleSuccess() throws Exception {
@@ -106,7 +111,7 @@ class RoleControllerTest {
     @Test
     void testGetRoleByIdNotFound() throws Exception {
         when(roleService.getRoleById(99L))
-                .thenThrow(new ResourceNotFoundException("Không tìm thấy vai trò với ID: 99"));
+                .thenThrow(new AppException(ErrorCode.ROLE_NOT_FOUND_BY_ID, 99L));
 
         mockMvc.perform(get("/roles/99"))
                 .andExpect(status().isNotFound())

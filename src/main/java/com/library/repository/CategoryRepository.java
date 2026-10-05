@@ -1,10 +1,15 @@
 package com.library.repository;
 
+import com.library.dto.category.CategorySimpleDto;
 import com.library.entity.Category;
+import com.library.enums.DisplayStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -13,6 +18,19 @@ import java.util.Optional;
  */
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSpecificationExecutor<Category> {
+
+    /**
+     * Lấy danh sách thể loại sách theo trạng thái hiển thị, sắp xếp tên A-Z.
+     * Ánh xạ trực tiếp sang CategorySimpleDto qua Constructor Expression của JPQL.
+     *
+     * @param status Trạng thái hiển thị (UNHIDE)
+     * @return Danh sách CategorySimpleDto
+     */
+    @Query("SELECT new com.library.dto.category.CategorySimpleDto(c.id, c.name) " +
+           "FROM Category c " +
+           "WHERE c.status = :status " +
+           "ORDER BY c.name ASC")
+    List<CategorySimpleDto> findActiveCategories(@Param("status") DisplayStatus status);
 
     /**
      * Tìm thể loại theo tên.

@@ -1,12 +1,17 @@
 package com.library.service;
 
 import com.library.dto.branch.BranchResponseDto;
+import com.library.dto.branch.BranchStatisticResponseDto;
 import com.library.entity.Branch;
+import com.library.enums.BorrowStatus;
 import com.library.enums.BranchStatus;
+import com.library.enums.DisplayStatus;
 import com.library.mapper.BranchMapper;
 import com.library.repository.BranchRepository;
+import com.library.repository.InventoryRepository;
 import com.library.repository.UserRepository;
 import com.library.requestform.branch.BranchFilterRequestForm;
+import com.library.requestform.branch.BranchUpdateRequestForm;
 import com.library.service.impl.BranchServiceImpl;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,12 +26,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +47,9 @@ class BranchServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private InventoryRepository inventoryRepository;
 
     @Mock
     private BranchMapper branchMapper;
@@ -95,4 +107,91 @@ class BranchServiceImplTest {
         assertTrue(statuses.contains(BranchStatus.OPEN));
         assertTrue(statuses.contains(BranchStatus.CLOSED));
     }
+
+    @Test
+    @DisplayName("Cập nhật chi nhánh sang trạng thái CLOSED -> Tự động cập nhật tất cả tồn kho sang HIDE")
+    void testUpdateBranch_StatusClosed_CascadesToInventory() {
+        Branch branch = Branch.builder()
+                .code("CN01")
+                .name("Chi nhánh Hà Nội")
+                .status(BranchStatus.OPEN)
+                .build();
+        branch.setId(1L);
+
+        BranchUpdateRequestForm form = BranchUpdateRequestForm.builder()
+                .status(BranchStatus.CLOSED)
+                .build();
+
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(branch));
+        doAnswer(invocation -> {
+            Branch b = invocation.getArgument(1);
+            b.setStatus(BranchStatus.CLOSED);
+            return null;
+        }).when(branchMapper).updateEntityFromForm(eq(form), any(Branch.class));
+
+        when(branchRepository.save(any(Branch.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BranchResponseDto dto = BranchResponseDto.builder()
+                .id(1L)
+                .code("CN01")
+                .status(BranchStatus.CLOSED)
+                .build();
+        when(branchMapper.toDto(any(Branch.class))).thenReturn(dto);
+
+        BranchResponseDto result = branchService.updateBranch(1L, form);
+
+        assertNotNull(result);
+        assertEquals(BranchStatus.CLOSED, branch.getStatus());
+        verify(branchRepository).save(branch);
+        verify(inventoryRepository).updateStatusByBranchId(1L, DisplayStatus.HIDE);
+    }
+
+    @Test
+    @DisplayName("Kiểm tra lấy danh sách phân trang thống kê chi nhánh với bộ lọc và tính toán số sách đang mượn")
+    void testGetBranchStatistics_Success() {
+        BranchFilterRequestForm filter = BranchFilterRequestForm.builder()
+                .code("CN01")
+                .name("Chi nhánh Hà Nội")
+                .status(BranchStatus.OPEN)
+                .build();
+
+        BranchStatisticResponseDto statDto = new BranchStatisticResponseDto(
+                1L,
+                "CN01",
+                "Chi nhánh Hà Nội",
+                BranchStatus.OPEN,
+                "branches/hanoi.jpg",
+                100L,
+                70L,
+                15L,
+                new BigDecimal("1500000.00")
+        );
+
+        Page<BranchStatisticResponseDto> statPage = new PageImpl<>(List.of(statDto));
+        when(branchRepository.findBranchStatisticsWithFilter(eq(filter), any(), any(Pageable.class)))
+                .thenReturn(statPage);
+
+        Page<BranchStatisticResponseDto> result = branchService.getBranchStatistics(filter);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        BranchStatisticResponseDto item = result.getContent().get(0);
+        assertEquals("CN01", item.getCode());
+        assertEquals(100L, item.getTotalBooksInStock());
+        assertEquals(70L, item.getTotalAvailableBooks());
+        assertEquals(30L, item.getTotalBorrowedBooks()); // 100 - 70 = 30
+        assertEquals(15L, item.getTotalBorrowSlips());
+        assertEquals(new BigDecimal("1500000.00"), item.getTotalRevenue());
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<BorrowStatus>> statusesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(branchRepository).findBranchStatisticsWithFilter(eq(filter), statusesCaptor.capture(), pageableCaptor.capture());
+
+        List<BorrowStatus> capturedStatuses = statusesCaptor.getValue();
+        assertTrue(capturedStatuses.contains(BorrowStatus.BORROWED));
+        assertTrue(capturedStatuses.contains(BorrowStatus.RETURNED));
+        assertTrue(capturedStatuses.contains(BorrowStatus.OVERDUE));
+    }
 }
+

@@ -57,14 +57,14 @@ public class BorrowSlipController {
 
     /**
      * API lấy danh sách toàn bộ phiếu mượn phân trang kèm bộ lọc và sắp xếp.
-     * Cho phép truyền branchId bất kỳ trong bộ lọc. Dành riêng cho ADMIN.
+     * Cho phép truyền branchId bất kỳ trong bộ lọc. Dành cho ADMIN, BRANCHMANAGER và STAFF.
      *
      * @param filter Bộ lọc tìm kiếm, sắp xếp và phân trang nhận qua Query
      *               Parameters
      * @return Trang kết quả chứa danh sách phiếu mượn bọc trong chuẩn ApiResponse
      */
     @GetMapping("/admin/borrow-slips")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BRANCHMANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<BorrowSlipResponseDto>>> getAllBorrowSlips(
             @ModelAttribute BorrowSlipFilterRequestForm filter) {
         // Bước 1: Gọi tầng Service xử lý truy vấn phân trang toàn hệ thống
@@ -94,6 +94,24 @@ public class BorrowSlipController {
 
         // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu mượn của chi nhánh thành công!", result));
+    }
+
+    /**
+     * API lấy danh sách phân trang phiếu mượn kèm chi tiết sách (borrowItems) cho tài khoản đang đăng nhập.
+     * Cho phép tất cả tài khoản đã đăng nhập (ADMIN, BRANCHMANAGER, STAFF, CUSTOMER) đều được truy cập (không gắn @PreAuthorize).
+     * Tự động trích xuất accountId, username từ SecurityContextHolder để kiểm tra trạng thái hoạt động và lọc chính xác theo userId.
+     *
+     * @param filter Bộ lọc trạng thái mượn (status), trạng thái thanh toán (paymentStatus), sắp xếp ngày mượn/trả và phân trang (mặc định size = 10)
+     * @return Trang kết quả chứa danh sách phiếu mượn bọc trong chuẩn ApiResponse với HTTP 200 OK
+     */
+    @GetMapping("/borrow-slips/my-slips")
+    public ResponseEntity<ApiResponse<Page<BorrowSlipResponseDto>>> getMyBorrowSlips(
+            @ModelAttribute BorrowSlipFilterRequestForm filter) {
+        // Bước 1: Gọi tầng Service để kiểm tra tài khoản và lấy danh sách phiếu mượn của tài khoản hiện tại
+        Page<BorrowSlipResponseDto> result = borrowSlipService.getMyBorrowSlips(filter);
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu mượn cá nhân thành công!", result));
     }
 
     /**

@@ -2,6 +2,7 @@ package com.library.controller;
 
 import com.library.dto.ApiResponse;
 import com.library.dto.branch.BranchResponseDto;
+import com.library.dto.branch.BranchStatisticResponseDto;
 import com.library.enums.BranchStatus;
 import com.library.requestform.branch.BranchCreateRequestForm;
 import com.library.requestform.branch.BranchFilterRequestForm;
@@ -142,5 +143,23 @@ public class BranchController {
 
         // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách trạng thái chi nhánh thành công!", statuses));
+    }
+
+    /**
+     * API lấy danh sách phân trang thống kê các chi nhánh thư viện (Dành riêng cho ADMIN).
+     * Trả về thông tin chi nhánh kèm tổng số sách trong kho, số sách còn, số sách đang mượn, lượt mượn và doanh thu.
+     *
+     * @param filter Bộ lọc tìm kiếm (code, name, status) và tham số phân trang nhận qua Query Parameters
+     * @return Trang kết quả chứa danh sách BranchStatisticResponseDto bọc trong chuẩn ApiResponse
+     */
+    @GetMapping("/admin/branches/statistics")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Page<BranchStatisticResponseDto>>> getBranchStatistics(
+            @Valid @ModelAttribute BranchFilterRequestForm filter) {
+        // Bước 1: Gọi tầng Service xử lý truy vấn phân trang thống kê chi nhánh
+        Page<BranchStatisticResponseDto> result = branchService.getBranchStatistics(filter);
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách thống kê chi nhánh thành công!", result));
     }
 }

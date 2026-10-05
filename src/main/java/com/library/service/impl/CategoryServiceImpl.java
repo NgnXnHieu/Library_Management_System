@@ -1,6 +1,7 @@
 package com.library.service.impl;
 
 import com.library.dto.category.CategoryResponseDto;
+import com.library.dto.category.CategorySimpleDto;
 import com.library.entity.Category;
 import com.library.enums.DisplayStatus;
 import com.library.exception.AppException;
@@ -8,6 +9,7 @@ import com.library.exception.ErrorCode;
 import com.library.mapper.CategoryMapper;
 import com.library.repository.BookRepository;
 import com.library.repository.CategoryRepository;
+import com.library.repository.InventoryRepository;
 import com.library.requestform.category.CategoryCreateRequestForm;
 import com.library.requestform.category.CategoryFilterRequestForm;
 import com.library.requestform.category.CategoryUpdateRequestForm;
@@ -33,6 +35,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final BookRepository bookRepository;
+    private final InventoryRepository inventoryRepository;
     private final CategoryMapper categoryMapper;
 
     /**
@@ -101,7 +104,13 @@ public class CategoryServiceImpl implements CategoryService {
         // Bước 4: Lưu thay đổi vào Database
         Category updatedCategory = categoryRepository.save(category);
 
-        // Bước 5: Chuyển đổi sang DTO và trả về kết quả
+        // Bước 5: Nếu thể loại chuyển sang HIDE -> Tự động chuyển tất cả sách thuộc thể loại và tồn kho liên quan sang HIDE
+        if (updatedCategory.getStatus() == DisplayStatus.HIDE) {
+            bookRepository.updateStatusByCategoryId(updatedCategory.getId(), DisplayStatus.HIDE);
+            inventoryRepository.updateStatusByBookCategoryId(updatedCategory.getId(), DisplayStatus.HIDE);
+        }
+
+        // Bước 6: Chuyển đổi sang DTO và trả về kết quả
         return categoryMapper.toDto(updatedCategory);
     }
 
@@ -156,6 +165,19 @@ public class CategoryServiceImpl implements CategoryService {
 
         // Bước 2: Chuyển đổi sang danh sách DTO và trả về
         return categoryMapper.toDtoList(categories);
+    }
+
+    /**
+     * Lấy danh sách các thể loại sách đang hiển thị công khai (status = UNHIDE) cho khách hàng.
+     * Phục vụ menu dropdown ngang trên Header và bộ lọc danh sách sách.
+     *
+     * @return Danh sách CategorySimpleDto gồm id và name
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CategorySimpleDto> getActiveCategories() {
+        // Bước 1: Truy vấn danh sách thể loại có status = UNHIDE từ Database
+        return categoryRepository.findActiveCategories(DisplayStatus.UNHIDE);
     }
 
     /**

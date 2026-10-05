@@ -1,7 +1,5 @@
 package com.library.dto.book;
 
-import com.library.enums.DisplayStatus;
-import com.library.util.FileUtil;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -9,21 +7,21 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * DTO trả về thông tin chi tiết đầu sách.
+ * DTO trả về thông tin chi tiết một đầu sách kèm danh sách tồn kho theo chi nhánh dành cho khách hàng.
+ * Được ánh xạ qua @SqlResultSetMapping và @ConstructorResult.
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class BookResponseDto {
+public class BookDetailCustomerResponseDto {
 
     private Long id;
-    private Long categoryId;
-    private String categoryName;
     private String isbn;
     private String title;
     private String author;
@@ -35,47 +33,45 @@ public class BookResponseDto {
     private BigDecimal price;
     private BigDecimal rentalPrice;
     private BigDecimal fineAmount;
-    private DisplayStatus status;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private String status;
+    private Long categoryId;
+    private String categoryName;
+
+    @Builder.Default
+    private List<BookBranchInventoryDto> inventories = new ArrayList<>();
 
     /**
-     * Constructor phục vụ JPQL Constructor Expression (SELECT new com.library.dto.book.BookResponseDto(...)).
-     * Tối ưu hóa hiệu năng: không nạp trường description (TEXT dài) vào RAM, tự động sinh coverImageUrl từ key.
+     * Constructor phục vụ ánh xạ trực tiếp từ Native SQL Query thông qua @ConstructorResult của JPA.
      */
-    public BookResponseDto(
+    public BookDetailCustomerResponseDto(
             Long id,
-            Long categoryId,
-            String categoryName,
             String isbn,
             String title,
             String author,
             String publisher,
             Integer publicationYear,
+            String description,
             String coverImageKey,
             BigDecimal price,
             BigDecimal rentalPrice,
             BigDecimal fineAmount,
-            DisplayStatus status,
-            LocalDateTime createdAt,
-            LocalDateTime updatedAt
-    ) {
+            String status,
+            Long categoryId,
+            String categoryName) {
         this.id = id;
-        this.categoryId = categoryId;
-        this.categoryName = categoryName;
         this.isbn = isbn;
         this.title = title;
         this.author = author;
         this.publisher = publisher;
         this.publicationYear = publicationYear;
-        this.description = null;
+        this.description = description;
         this.coverImageKey = coverImageKey;
-        this.coverImageUrl = FileUtil.buildFileUrl(coverImageKey);
         this.price = price;
         this.rentalPrice = rentalPrice;
         this.fineAmount = fineAmount;
         this.status = status;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+        this.categoryId = categoryId;
+        this.categoryName = categoryName;
+        this.inventories = new ArrayList<>();
     }
 }

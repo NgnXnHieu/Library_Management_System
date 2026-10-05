@@ -31,6 +31,7 @@ public interface BorrowSlipMapper {
     @Mapping(source = "customer.phone", target = "customerPhone")
     @Mapping(source = "staff.id", target = "staffId")
     @Mapping(source = "staff.fullName", target = "staffName")
+    @Mapping(source = "staff.phone", target = "staffPhone")
     @Mapping(source = "branch.id", target = "branchId")
     @Mapping(source = "branch.name", target = "branchName")
     @Mapping(source = "borrowItems", target = "items")
@@ -43,7 +44,7 @@ public interface BorrowSlipMapper {
     @Mapping(source = "inventory.book.id", target = "bookId")
     @Mapping(source = "inventory.book.title", target = "bookTitle")
     @Mapping(source = "inventory.book.isbn", target = "isbn")
-    @Mapping(source = "inventory.book.rentalPrice", target = "rentalPrice")
+    @Mapping(source = "rentalPrice", target = "rentalPrice")
     BorrowItemResponseDto toBorrowItemDto(BorrowItem item);
 
     /**

@@ -1,12 +1,16 @@
 package com.library.service.impl;
 
+import com.library.dto.book.BookBranchInventoryDto;
+import com.library.dto.book.BookDetailCustomerResponseDto;
 import com.library.dto.book.BookResponseDto;
 import com.library.entity.Book;
 import com.library.entity.Branch;
 import com.library.entity.Category;
 import com.library.entity.Inventory;
+import com.library.enums.BranchStatus;
 import com.library.enums.DisplayStatus;
 import com.library.exception.AppException;
+import com.library.exception.BadRequestException;
 import com.library.exception.ErrorCode;
 import com.library.mapper.BookMapper;
 import com.library.repository.BookRepository;
@@ -70,6 +74,12 @@ public class BookServiceImpl implements BookService {
         Book book = bookMapper.toEntity(form, category);
         book.setIsbn(isbn);
 
+        // Bước 3.1: Kiểm tra ràng buộc trạng thái: Không cho phép tạo sách UNHIDE nếu thể loại đang là HIDE
+        if (book.getStatus() == DisplayStatus.UNHIDE && category.getStatus() == DisplayStatus.HIDE) {
+            throw new BadRequestException("Không thể tạo đầu sách ở trạng thái hiển thị (UNHIDE) vì thể loại '" 
+                    + category.getName() + "' đang ở trạng thái ẩn (HIDE). Vui lòng hiển thị thể loại trước!");
+        }
+
         // Bước 4: Lưu đầu sách mới vào Database
         Book savedBook = bookRepository.save(book);
 
@@ -105,10 +115,16 @@ public class BookServiceImpl implements BookService {
     @Override
     @Transactional(readOnly = true)
     public Page<BookResponseDto> getAllBooks(BookFilterRequestForm filter) {
-        // Bước 1: Khởi tạo Specification từ filter form (đã bao gồm JOIN FETCH Category)
-        Specification<Book> spec = BookSpecification.filter(filter);
+        if (filter == null) {
+            filter = new BookFilterRequestForm();
+        }
 
-        // Bước 2: Xác định hướng và trường sắp xếp (Sort)
+        // Đối với API công khai cho khách hàng: Chỉ hiển thị sách có trạng thái UNHIDE
+        if (filter.getStatus() == null) {
+            filter.setStatus(DisplayStatus.UNHIDE);
+        }
+
+        // Bước 1: Xác định hướng và trường sắp xếp (Sort)
         Sort.Direction direction = (filter.getSortDir() != null && "asc".equalsIgnoreCase(filter.getSortDir()))
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
@@ -118,16 +134,13 @@ public class BookServiceImpl implements BookService {
                 : "id";
         Sort sort = Sort.by(direction, sortBy);
 
-        // Bước 3: Khởi tạo Pageable
+        // Bước 2: Khởi tạo Pageable
         int page = Math.max(filter.getPage(), 0);
         int size = filter.getSize() > 0 ? filter.getSize() : 10;
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Bước 4: Thực hiện truy vấn kết hợp Specification và phân trang
-        Page<Book> bookPage = bookRepository.findAll(spec, pageable);
-
-        // Bước 5: Ánh xạ kết quả sang DTO bằng MapStruct
-        return bookPage.map(bookMapper::toDto);
+        // Bước 3: Thực hiện truy vấn JPQL Constructor Expression trực tiếp lên DTO
+        return bookRepository.findBooksWithFilter(filter, pageable);
     }
 
     /**
@@ -167,6 +180,14 @@ public class BookServiceImpl implements BookService {
         // Bước 4: Ánh xạ các trường còn lại từ form sang entity qua MapStruct (tự động bỏ qua các trường null)
         bookMapper.updateEntityFromForm(form, book);
 
+        // Bước 4.1: Kiểm tra ràng buộc trạng thái: Nếu sách chuyển sang UNHIDE thì thể loại phải là UNHIDE
+        if (book.getStatus() == DisplayStatus.UNHIDE 
+                && book.getCategory() != null 
+                && book.getCategory().getStatus() == DisplayStatus.HIDE) {
+            throw new BadRequestException("Không thể chuyển đầu sách sang trạng thái hiển thị (UNHIDE) vì thể loại '" 
+                    + book.getCategory().getName() + "' đang ở trạng thái ẩn (HIDE). Vui lòng hiển thị thể loại trước!");
+        }
+
         // Bước 5: Chuẩn hóa khoảng trắng cho các trường chuỗi ký tự nếu được cập nhật
         if (form.getTitle() != null && !form.getTitle().trim().isEmpty()) {
             book.setTitle(form.getTitle().trim());
@@ -190,6 +211,11 @@ public class BookServiceImpl implements BookService {
         // Bước 6: Lưu đầu sách đã cập nhật vào Database
         Book updatedBook = bookRepository.save(book);
 
+        // Bước 6.1: Nếu sách chuyển sang HIDE -> Tự động chuyển tất cả tồn kho của sách ở các chi nhánh sang HIDE
+        if (updatedBook.getStatus() == DisplayStatus.HIDE) {
+            inventoryRepository.updateStatusByBookId(updatedBook.getId(), DisplayStatus.HIDE);
+        }
+
         // Bước 7: Chuyển đổi Entity sang DTO và trả về kết quả
         return bookMapper.toDto(updatedBook);
     }
@@ -203,10 +229,11 @@ public class BookServiceImpl implements BookService {
     @Override
     @Transactional(readOnly = true)
     public Page<BookResponseDto> getBooksWithFilter(BookFilterRequestForm filter) {
-        // Bước 1: Khởi tạo Specification từ filter form
-        Specification<Book> spec = BookSpecification.filter(filter);
+        if (filter == null) {
+            filter = new BookFilterRequestForm();
+        }
 
-        // Bước 2: Xác định hướng và trường sắp xếp (Sort)
+        // Bước 1: Xác định hướng và trường sắp xếp (Sort)
         Sort.Direction direction = (filter.getSortDir() != null && "asc".equalsIgnoreCase(filter.getSortDir()))
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
@@ -216,16 +243,72 @@ public class BookServiceImpl implements BookService {
                 : "id";
         Sort sort = Sort.by(direction, sortBy);
 
-        // Bước 3: Khởi tạo Pageable
+        // Bước 2: Khởi tạo Pageable
         int page = Math.max(filter.getPage(), 0);
         int size = filter.getSize() > 0 ? filter.getSize() : 10;
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Bước 4: Thực hiện truy vấn kết hợp Specification và phân trang
-        Page<Book> bookPage = bookRepository.findAll(spec, pageable);
+        // Bước 3: Thực hiện truy vấn JPQL Constructor Expression trực tiếp lên DTO
+        return bookRepository.findBooksWithFilter(filter, pageable);
+    }
 
-        // Bước 5: Ánh xạ kết quả sang DTO bằng MapStruct
-        return bookPage.map(bookMapper::toDto);
+    /**
+     * Lấy thông tin chi tiết một đầu sách kèm danh sách tồn kho theo chi nhánh (Public dành cho khách hàng).
+     *
+     * Logic nghiệp vụ:
+     * - Bước 1: Kiểm tra sách có tồn tại và trạng thái hiển thị (UNHIDE) hay không.
+     * - Bước 2: Nếu có truyền branchId, kiểm tra chi nhánh có tồn tại và đang mở cửa (OPEN) hay không.
+     * - Bước 3: Lấy thông tin chi tiết sách kèm thể loại qua Named Native Query và @SqlResultSetMapping.
+     * - Bước 4: Tạo link ảnh bìa coverImageUrl từ coverImageKey qua FileUtil.
+     * - Bước 5: Lấy danh sách tồn kho khả dụng qua Named Native Query (nếu có branchId thì lấy của chi nhánh đó, ngược lại lấy tất cả chi nhánh đang mở).
+     * - Bước 6: Đóng gói và trả về DTO hoàn chỉnh.
+     *
+     * @param bookId   ID của đầu sách (bắt buộc)
+     * @param branchId ID của chi nhánh (tùy chọn)
+     * @return DTO thông tin chi tiết sách kèm tồn kho
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public BookDetailCustomerResponseDto getBookDetailForCustomer(Long bookId, Long branchId) {
+        // Bước 1: Kiểm tra sách có tồn tại trong hệ thống hay không
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND, bookId));
+
+        // Kiểm tra trạng thái hiển thị của sách: Chỉ hiển thị sách có trạng thái UNHIDE cho khách hàng
+        if (book.getStatus() == DisplayStatus.HIDE) {
+            throw new AppException(ErrorCode.BOOK_HIDDEN, book.getTitle());
+        }
+
+        // Bước 2: Nếu có truyền branchId, kiểm tra chi nhánh có tồn tại và đang mở cửa không
+        if (branchId != null) {
+            Branch branch = branchRepository.findById(branchId)
+                    .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND, branchId));
+
+            if (branch.getStatus() == BranchStatus.CLOSED) {
+                throw new AppException(ErrorCode.BRANCH_CLOSED, branch.getName());
+            }
+        }
+
+        // Bước 3: Lấy thông tin chi tiết sách kèm tên thể loại qua @SqlResultSetMapping
+        BookDetailCustomerResponseDto bookDetail = bookRepository.findBookDetailCustomerById(bookId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND, bookId));
+
+        // Bước 4: Sinh URL ảnh bìa từ coverImageKey
+        bookDetail.setCoverImageUrl(FileUtil.buildFileUrl(bookDetail.getCoverImageKey()));
+
+        // Bước 5: Lấy danh sách tồn kho theo chi nhánh qua @SqlResultSetMapping
+        List<BookBranchInventoryDto> inventories;
+        if (branchId != null) {
+            // Trường hợp 1: Có truyền branchId -> Chỉ lấy tồn kho của chi nhánh đó
+            inventories = inventoryRepository.findCustomerInventoriesByBookAndBranch(bookId, branchId);
+        } else {
+            // Trường hợp 2: Không truyền branchId -> Lấy toàn bộ tồn kho tại tất cả chi nhánh đang mở
+            inventories = inventoryRepository.findAllCustomerInventoriesByBook(bookId);
+        }
+
+        // Bước 6: Gán danh sách tồn kho vào DTO chi tiết sách và trả về
+        bookDetail.setInventories(inventories);
+        return bookDetail;
     }
 
     /**

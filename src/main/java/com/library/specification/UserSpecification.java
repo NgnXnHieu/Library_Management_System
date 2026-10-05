@@ -1,6 +1,7 @@
 package com.library.specification;
 
 import com.library.entity.User;
+import com.library.requestform.user.CustomerFilterRequestForm;
 import com.library.requestform.user.UserAdminFilterRequestForm;
 import com.library.requestform.user.UserFilterRequestForm;
 import jakarta.persistence.criteria.JoinType;
@@ -130,6 +131,69 @@ public final class UserSpecification {
             }
 
             // Bước 6: Trả về điều kiện truy vấn tổng hợp
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
+     * Tạo Specification lọc danh sách phân trang người dùng có vai trò là khách hàng (CUSTOMER).
+     * Tự động JOIN FETCH account, branch và role khi câu truy vấn là DATA Query để nạp đủ dữ liệu cho UserResponseDto.
+     * Cố định điều kiện lọc vai trò role là CUSTOMER và áp dụng các tiêu chí lọc: username, fullName, phone, email, status.
+     *
+     * @param filter Đối tượng chứa các tham số lọc phân trang khách hàng
+     * @return Specification<User> dùng cho truy vấn Spring Data JPA
+     */
+    public static Specification<User> filterCustomerPage(CustomerFilterRequestForm filter) {
+        return (root, query, cb) -> {
+            // Bước 1: Thực hiện JOIN FETCH với account, branch và role để tối ưu hóa truy vấn, tránh N+1 query
+            if (query != null && query.getResultType() != Long.class && query.getResultType() != long.class) {
+                root.fetch("account", JoinType.LEFT);
+                root.fetch("branch", JoinType.LEFT);
+                root.fetch("role", JoinType.LEFT);
+            }
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            // Bước 2: Cố định điều kiện vai trò là Khách hàng (CUSTOMER hoặc ROLE_CUSTOMER)
+            predicates.add(cb.or(
+                    cb.equal(cb.upper(root.get("role").get("code")), "CUSTOMER"),
+                    cb.equal(cb.upper(root.get("role").get("code")), "ROLE_CUSTOMER")
+            ));
+
+            if (filter == null) {
+                return cb.and(predicates.toArray(new Predicate[0]));
+            }
+
+            // Bước 3: Lọc theo tên đăng nhập (username)
+            if (filter.getUsername() != null && !filter.getUsername().trim().isEmpty()) {
+                String pattern = "%" + filter.getUsername().trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("account").get("username")), pattern));
+            }
+
+            // Bước 4: Lọc theo họ và tên (fullName)
+            if (filter.getFullName() != null && !filter.getFullName().trim().isEmpty()) {
+                String pattern = "%" + filter.getFullName().trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("fullName")), pattern));
+            }
+
+            // Bước 5: Lọc theo số điện thoại (phone)
+            if (filter.getPhone() != null && !filter.getPhone().trim().isEmpty()) {
+                String pattern = "%" + filter.getPhone().trim() + "%";
+                predicates.add(cb.like(root.get("phone"), pattern));
+            }
+
+            // Bước 6: Lọc theo email
+            if (filter.getEmail() != null && !filter.getEmail().trim().isEmpty()) {
+                String pattern = "%" + filter.getEmail().trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("email")), pattern));
+            }
+
+            // Bước 7: Lọc theo trạng thái tài khoản (status) nếu có
+            if (filter.getStatus() != null) {
+                predicates.add(cb.equal(root.get("status"), filter.getStatus()));
+            }
+
+            // Bước 8: Trả về điều kiện truy vấn tổng hợp
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }

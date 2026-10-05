@@ -1,6 +1,7 @@
 package com.library.service;
 
 import com.library.dto.category.CategoryResponseDto;
+import com.library.dto.category.CategorySimpleDto;
 import com.library.enums.DisplayStatus;
 import com.library.requestform.category.CategoryCreateRequestForm;
 import com.library.requestform.category.CategoryFilterRequestForm;
@@ -52,6 +53,13 @@ public interface CategoryService {
      * @return Danh sách DTO các thể loại
      */
     List<CategoryResponseDto> getAllCategories();
+
+    /**
+     * Lấy danh sách các thể loại đang hiển thị công khai (status = UNHIDE) cho khách hàng (phục vụ menu dropdown).
+     *
+     * @return Danh sách CategorySimpleDto gồm id và name
+     */
+    List<CategorySimpleDto> getActiveCategories();
 
     /**
      * Lấy danh sách phân trang các thể loại kèm theo bộ lọc tìm kiếm và sắp xếp (Dành cho ADMIN).

@@ -1,6 +1,7 @@
 package com.library.controller;
 
 import com.library.dto.ApiResponse;
+import com.library.dto.book.BookDetailCustomerResponseDto;
 import com.library.dto.book.BookResponseDto;
 import com.library.requestform.book.BookCreateRequestForm;
 import com.library.requestform.book.BookFilterRequestForm;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -58,6 +60,21 @@ public class BookController {
             @ModelAttribute BookFilterRequestForm filter) {
         Page<BookResponseDto> books = bookService.getAllBooks(filter);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đầu sách thành công!", books));
+    }
+
+    /**
+     * API công khai xem thông tin chi tiết một đầu sách kèm danh sách tồn kho theo chi nhánh (Dành cho khách hàng).
+     *
+     * @param bookId   ID của đầu sách cần xem (bắt buộc truyền trên URL Path)
+     * @param branchId ID chi nhánh cần xem tồn kho (tùy chọn truyền qua Query Parameter)
+     * @return DTO chi tiết đầu sách kèm tồn kho chi nhánh bọc trong chuẩn ApiResponse
+     */
+    @GetMapping("/public/books/{bookId}")
+    public ResponseEntity<ApiResponse<BookDetailCustomerResponseDto>> getBookDetail(
+            @PathVariable Long bookId,
+            @RequestParam(required = false) Long branchId) {
+        BookDetailCustomerResponseDto bookDetail = bookService.getBookDetailForCustomer(bookId, branchId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin chi tiết đầu sách thành công!", bookDetail));
     }
 
     /**

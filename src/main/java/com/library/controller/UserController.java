@@ -2,6 +2,7 @@ package com.library.controller;
 
 import com.library.dto.ApiResponse;
 import com.library.dto.user.UserResponseDto;
+import com.library.requestform.user.CustomerFilterRequestForm;
 import com.library.requestform.user.UserAdminFilterRequestForm;
 import com.library.requestform.user.UserFilterRequestForm;
 import com.library.requestform.user.UserUpdateRequestForm;
@@ -22,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Controller tiếp nhận và xử lý các yêu cầu liên quan đến quản lý người dùng (User).
+ * Controller tiếp nhận và xử lý các yêu cầu liên quan đến quản lý người dùng
+ * (User).
  */
 @RestController
 @RequiredArgsConstructor
@@ -31,17 +33,20 @@ public class UserController {
     private final UserService userService;
 
     /**
-     * API tìm kiếm độc giả (chỉ lấy tài khoản CUSTOMER đang hoạt động ACTIVE) phục vụ lập phiếu mượn.
+     * API tìm kiếm độc giả (chỉ lấy tài khoản CUSTOMER đang hoạt động ACTIVE) phục
+     * vụ lập phiếu mượn.
      * Dành riêng cho ADMIN, BRANCHMANAGER và STAFF.
      *
-     * @param filter Bộ lọc tìm kiếm người dùng (search: username, fullName, phone, email) nhận qua Query Parameters
+     * @param filter Bộ lọc tìm kiếm người dùng (search: username, fullName, phone,
+     *               email) nhận qua Query Parameters
      * @return Danh sách DTO độc giả bọc trong chuẩn ApiResponse
      */
     @GetMapping("/users/customer")
     @PreAuthorize("hasAnyRole('ADMIN', 'BRANCHMANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<List<UserResponseDto>>> getCustomers(
             @ModelAttribute UserFilterRequestForm filter) {
-        // Bước 1: Gọi xuống tầng Service để xử lý truy vấn danh sách độc giả theo bộ lọc
+        // Bước 1: Gọi xuống tầng Service để xử lý truy vấn danh sách độc giả theo bộ
+        // lọc
         List<UserResponseDto> customers = userService.filterCustomers(filter);
 
         // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP status 200 OK
@@ -49,18 +54,41 @@ public class UserController {
     }
 
     /**
+     * API lấy danh sách thông tin tất cả các tài khoản có vai trò là khách hàng (CUSTOMER) phân trang.
+     * Hỗ trợ bộ lọc riêng biệt theo username, fullName, phone, email và trạng thái tài khoản.
+     * Dành cho ADMIN, BRANCHMANAGER và STAFF phục vụ quản lý và xem hồ sơ mượn sách.
+     *
+     * @param filter Bộ lọc tìm kiếm và phân trang khách hàng nhận qua Query Parameters
+     * @return Trang kết quả UserResponseDto bọc trong chuẩn ApiResponse
+     */
+    @GetMapping("/users/customers")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BRANCHMANAGER', 'STAFF')")
+    public ResponseEntity<ApiResponse<Page<UserResponseDto>>> getCustomersPage(
+            @Valid @ModelAttribute CustomerFilterRequestForm filter) {
+        // Bước 1: Gọi xuống tầng Service để xử lý truy vấn danh sách khách hàng phân trang
+        Page<UserResponseDto> customers = userService.getCustomersWithFilter(filter);
+
+        // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP status 200 OK
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách khách hàng thành công!", customers));
+    }
+
+    /**
      * API lấy danh sách phân trang người dùng kèm theo bộ lọc mở rộng và sắp xếp.
-     * Sử dụng JPA Specification kết hợp JOIN FETCH an toàn với account, branch và role để chống N+1 query.
+     * Sử dụng JPA Specification kết hợp JOIN FETCH an toàn với account, branch và
+     * role để chống N+1 query.
      * Dành riêng cho ADMIN.
      *
-     * @param filter Bộ lọc tìm kiếm và phân trang người dùng (searchName, role, branchName, statuses, sortBy, sortDir, page, size)
-     * @return Trang kết quả chứa danh sách UserResponseDto bọc trong chuẩn ApiResponse
+     * @param filter Bộ lọc tìm kiếm và phân trang người dùng (searchName, role,
+     *               branchName, statuses, sortBy, sortDir, page, size)
+     * @return Trang kết quả chứa danh sách UserResponseDto bọc trong chuẩn
+     *         ApiResponse
      */
     @GetMapping("/admin/users")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Page<UserResponseDto>>> getAdminUsers(
             @Valid @ModelAttribute UserAdminFilterRequestForm filter) {
-        // Bước 1: Gọi xuống tầng Service để xử lý truy vấn danh sách người dùng phân trang
+        // Bước 1: Gọi xuống tầng Service để xử lý truy vấn danh sách người dùng phân
+        // trang
         Page<UserResponseDto> users = userService.getUsersWithFilter(filter);
 
         // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP status 200 OK
@@ -70,7 +98,8 @@ public class UserController {
     /**
      * API cập nhật thông tin tài khoản người dùng theo ma trận phân quyền:
      * - ADMIN: Cập nhật cho mọi role trừ ADMIN.
-     * - BRANCHMANAGER: Cập nhật cho mọi role trừ ADMIN và BRANCHMANAGER. Không được nâng role lên ADMIN.
+     * - BRANCHMANAGER: Cập nhật cho mọi role trừ ADMIN và BRANCHMANAGER. Không được
+     * nâng role lên ADMIN.
      * - STAFF: Chỉ được cập nhật thông tin tài khoản CUSTOMER.
      * - Ràng buộc: Tài khoản CUSTOMER không được phép đổi sang vai trò khác.
      *
@@ -91,7 +120,8 @@ public class UserController {
     }
 
     /**
-     * API thay đổi trạng thái tài khoản người dùng nhanh chóng (ACTIVE, INACTIVE, LOCKED).
+     * API thay đổi trạng thái tài khoản người dùng nhanh chóng (ACTIVE, INACTIVE,
+     * LOCKED).
      * Dành riêng cho ADMIN và BRANCHMANAGER.
      *
      * @param id     ID người dùng cần đổi trạng thái

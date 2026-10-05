@@ -2,8 +2,9 @@ package com.library.service.impl;
 
 import com.library.dto.role.RoleResponseDto;
 import com.library.entity.Role;
+import com.library.exception.AppException;
 import com.library.exception.BadRequestException;
-import com.library.exception.ResourceNotFoundException;
+import com.library.exception.ErrorCode;
 import com.library.mapper.RoleMapper;
 import com.library.repository.RoleRepository;
 import com.library.requestform.role.RoleCreateRequestForm;
@@ -48,7 +49,7 @@ public class RoleServiceImpl implements RoleService {
     @Transactional
     public RoleResponseDto updateRole(Long id, RoleUpdateRequestForm form) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND_BY_ID, id));
 
         String code = form.getCode().trim().toUpperCase();
 
@@ -69,7 +70,7 @@ public class RoleServiceImpl implements RoleService {
     @Transactional
     public void deleteRole(Long id) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND_BY_ID, id));
 
         // Ràng buộc nghiệp vụ: Không cho phép xóa vai trò nếu đang có người dùng thuộc vai trò này
         if (userRepository.existsByRoleId(id)) {
@@ -83,7 +84,7 @@ public class RoleServiceImpl implements RoleService {
     @Transactional(readOnly = true)
     public RoleResponseDto getRoleById(Long id) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND_BY_ID, id));
         return roleMapper.toDto(role);
     }
 

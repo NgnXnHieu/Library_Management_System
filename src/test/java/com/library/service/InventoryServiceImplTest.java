@@ -4,6 +4,7 @@ import com.library.dto.inventory.InventoryResponseDto;
 import com.library.entity.Book;
 import com.library.entity.Branch;
 import com.library.entity.Inventory;
+import com.library.enums.BranchStatus;
 import com.library.enums.DisplayStatus;
 import com.library.exception.AppException;
 import com.library.exception.BadRequestException;
@@ -13,6 +14,7 @@ import com.library.repository.BookRepository;
 import com.library.repository.BranchRepository;
 import com.library.repository.InventoryRepository;
 import com.library.requestform.inventory.InventoryFilterRequestForm;
+import com.library.requestform.inventory.InventoryUpdateRequestForm;
 import com.library.security.UserDetailCustom;
 import com.library.service.impl.InventoryServiceImpl;
 import org.junit.jupiter.api.AfterEach;
@@ -75,12 +77,14 @@ class InventoryServiceImplTest {
         branch = Branch.builder()
                 .code("CN01")
                 .name("Chi nhánh Hà Nội")
+                .status(BranchStatus.OPEN)
                 .build();
         branch.setId(1L);
 
         book1 = Book.builder()
                 .title("Sách 1")
                 .isbn("ISBN-001")
+                .status(DisplayStatus.UNHIDE)
                 .build();
         book1.setId(101L);
 
@@ -90,6 +94,7 @@ class InventoryServiceImplTest {
                 .price(new BigDecimal("120000.00"))
                 .rentalPrice(new BigDecimal("12000.00"))
                 .fineAmount(new BigDecimal("5000.00"))
+                .status(DisplayStatus.UNHIDE)
                 .build();
         book2.setId(102L);
     }
@@ -187,18 +192,6 @@ class InventoryServiceImplTest {
                 .sortDir("desc")
                 .build();
 
-        Inventory inventory = Inventory.builder()
-                .branch(branch)
-                .book(book1)
-                .totalQuantity(10)
-                .availableQuantity(8)
-                .status(DisplayStatus.UNHIDE)
-                .build();
-        inventory.setId(1L);
-
-        Page<Inventory> mockPage = new PageImpl<>(List.of(inventory));
-        when(inventoryRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(mockPage);
-
         InventoryResponseDto expectedDto = InventoryResponseDto.builder()
                 .id(1L)
                 .branchId(1L)
@@ -208,7 +201,9 @@ class InventoryServiceImplTest {
                 .availableQuantity(8)
                 .status(DisplayStatus.UNHIDE)
                 .build();
-        when(inventoryMapper.toDto(any(Inventory.class))).thenReturn(expectedDto);
+
+        Page<InventoryResponseDto> mockPage = new PageImpl<>(List.of(expectedDto));
+        when(inventoryRepository.findAllInventoriesNative(any(), any())).thenReturn(mockPage);
 
         Page<InventoryResponseDto> result = inventoryService.getAllInventories(filter);
 
@@ -265,18 +260,6 @@ class InventoryServiceImplTest {
 
         InventoryFilterRequestForm filter = new InventoryFilterRequestForm();
 
-        Inventory inventory = Inventory.builder()
-                .branch(branch)
-                .book(book1)
-                .totalQuantity(5)
-                .availableQuantity(5)
-                .status(DisplayStatus.UNHIDE)
-                .build();
-        inventory.setId(1L);
-
-        Page<Inventory> mockPage = new PageImpl<>(List.of(inventory));
-        when(inventoryRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(mockPage);
-
         InventoryResponseDto expectedDto = InventoryResponseDto.builder()
                 .id(1L)
                 .branchId(1L)
@@ -285,12 +268,126 @@ class InventoryServiceImplTest {
                 .totalQuantity(5)
                 .availableQuantity(5)
                 .build();
-        when(inventoryMapper.toDto(any(Inventory.class))).thenReturn(expectedDto);
+
+        Page<InventoryResponseDto> mockPage = new PageImpl<>(List.of(expectedDto));
+        when(inventoryRepository.findAllInventoriesNative(any(), any())).thenReturn(mockPage);
 
         Page<InventoryResponseDto> result = inventoryService.getInventoriesByCurrentStaffBranch(filter);
 
         assertNotNull(result);
         assertEquals(1L, filter.getBranchId()); // Kiểm tra branchId đã được tự động gán vào filter
         assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("Ném lỗi BadRequestException khi cập nhật tồn kho sang UNHIDE nhưng sách đang là HIDE")
+    void testUpdateInventory_UnhideWithHiddenBook_ThrowsBadRequestException() {
+        book1.setStatus(DisplayStatus.HIDE);
+        Inventory inventory = Inventory.builder()
+                .branch(branch)
+                .book(book1)
+                .status(DisplayStatus.HIDE)
+                .build();
+        inventory.setId(5L);
+
+        when(inventoryRepository.findById(5L)).thenReturn(Optional.of(inventory));
+
+        InventoryUpdateRequestForm form = new InventoryUpdateRequestForm();
+        form.setStatus(DisplayStatus.UNHIDE);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                inventoryService.updateInventory(5L, form));
+
+        assertTrue(ex.getMessage().contains("vì đầu sách 'Sách 1' đang ở trạng thái ẩn (HIDE)"));
+        verify(inventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Ném lỗi BadRequestException khi cập nhật tồn kho sang UNHIDE nhưng chi nhánh đang là CLOSED")
+    void testUpdateInventory_UnhideWithClosedBranch_ThrowsBadRequestException() {
+        branch.setStatus(BranchStatus.CLOSED);
+        Inventory inventory = Inventory.builder()
+                .branch(branch)
+                .book(book1)
+                .status(DisplayStatus.HIDE)
+                .build();
+        inventory.setId(5L);
+
+        when(inventoryRepository.findById(5L)).thenReturn(Optional.of(inventory));
+
+        InventoryUpdateRequestForm form = new InventoryUpdateRequestForm();
+        form.setStatus(DisplayStatus.UNHIDE);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                inventoryService.updateInventory(5L, form));
+
+        assertTrue(ex.getMessage().contains("vì chi nhánh 'Chi nhánh Hà Nội' đang đóng cửa (CLOSED)"));
+        verify(inventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Ném lỗi BadRequestException khi đổi trạng thái tồn kho sang UNHIDE nhưng sách đang là HIDE")
+    void testChangeInventoryStatus_UnhideWithHiddenBook_ThrowsBadRequestException() {
+        book1.setStatus(DisplayStatus.HIDE);
+        Inventory inventory = Inventory.builder()
+                .branch(branch)
+                .book(book1)
+                .status(DisplayStatus.HIDE)
+                .build();
+        inventory.setId(5L);
+
+        when(inventoryRepository.findById(5L)).thenReturn(Optional.of(inventory));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                inventoryService.changeInventoryStatus(5L, DisplayStatus.UNHIDE));
+
+        assertTrue(ex.getMessage().contains("vì đầu sách 'Sách 1' đang ở trạng thái ẩn (HIDE)"));
+        verify(inventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Ném lỗi BadRequestException khi đổi trạng thái tồn kho sang UNHIDE nhưng chi nhánh CLOSED")
+    void testChangeInventoryStatus_UnhideWithClosedBranch_ThrowsBadRequestException() {
+        branch.setStatus(BranchStatus.CLOSED);
+        Inventory inventory = Inventory.builder()
+                .branch(branch)
+                .book(book1)
+                .status(DisplayStatus.HIDE)
+                .build();
+        inventory.setId(5L);
+
+        when(inventoryRepository.findById(5L)).thenReturn(Optional.of(inventory));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                inventoryService.changeInventoryStatus(5L, DisplayStatus.UNHIDE));
+
+        assertTrue(ex.getMessage().contains("vì chi nhánh 'Chi nhánh Hà Nội' đang đóng cửa (CLOSED)"));
+        verify(inventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Đổi trạng thái tồn kho sang UNHIDE thành công khi cả book và branch đều hợp lệ")
+    void testChangeInventoryStatus_Success() {
+        Inventory inventory = Inventory.builder()
+                .branch(branch)
+                .book(book1)
+                .status(DisplayStatus.HIDE)
+                .build();
+        inventory.setId(5L);
+
+        when(inventoryRepository.findById(5L)).thenReturn(Optional.of(inventory));
+        when(inventoryRepository.save(any(Inventory.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryResponseDto expectedDto = InventoryResponseDto.builder()
+                .id(5L)
+                .status(DisplayStatus.UNHIDE)
+                .build();
+        when(inventoryMapper.toDto(any(Inventory.class))).thenReturn(expectedDto);
+
+        InventoryResponseDto result = inventoryService.changeInventoryStatus(5L, DisplayStatus.UNHIDE);
+
+        assertNotNull(result);
+        assertEquals(DisplayStatus.UNHIDE, inventory.getStatus());
+        verify(inventoryRepository).save(inventory);
     }
 }

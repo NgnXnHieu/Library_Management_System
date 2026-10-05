@@ -1,15 +1,20 @@
 package com.library.entity;
 
+import com.library.dto.user.UserResponseDto;
 import com.library.enums.AccountStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.ColumnResult;
+import jakarta.persistence.ConstructorResult;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedNativeQuery;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.SqlResultSetMapping;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -25,6 +30,40 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+@NamedNativeQuery(
+        name = "User.findActiveCustomersBySearch",
+        query = "SELECT u.id AS userId, a.id AS accountId, a.username AS username, " +
+                "u.email AS email, u.phone AS phone, u.full_name AS fullName, " +
+                "r.name AS role, u.status AS status " +
+                "FROM users u " +
+                "JOIN accounts a ON u.account_id = a.id " +
+                "JOIN roles r ON u.role_id = r.id " +
+                "WHERE (r.code = 'CUSTOMER' OR r.code = 'ROLE_CUSTOMER') " +
+                "AND u.status = 'ACTIVE' " +
+                "AND (:search IS NULL OR :search = '' " +
+                "     OR u.full_name LIKE CONCAT('%', :search, '%') " +
+                "     OR u.phone LIKE CONCAT('%', :search, '%') " +
+                "     OR u.email LIKE CONCAT('%', :search, '%') " +
+                "     OR a.username LIKE CONCAT('%', :search, '%')) " +
+                "ORDER BY u.full_name ASC",
+        resultSetMapping = "CustomerSearchMapping"
+)
+@SqlResultSetMapping(
+        name = "CustomerSearchMapping",
+        classes = @ConstructorResult(
+                targetClass = UserResponseDto.class,
+                columns = {
+                        @ColumnResult(name = "userId", type = Long.class),
+                        @ColumnResult(name = "accountId", type = Long.class),
+                        @ColumnResult(name = "username", type = String.class),
+                        @ColumnResult(name = "email", type = String.class),
+                        @ColumnResult(name = "phone", type = String.class),
+                        @ColumnResult(name = "fullName", type = String.class),
+                        @ColumnResult(name = "role", type = String.class),
+                        @ColumnResult(name = "status", type = String.class)
+                }
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor

@@ -4,11 +4,11 @@ import com.library.dto.inventory.InventoryResponseDto;
 import com.library.entity.Book;
 import com.library.entity.Branch;
 import com.library.entity.Inventory;
+import com.library.enums.BranchStatus;
 import com.library.enums.DisplayStatus;
 import com.library.exception.AppException;
 import com.library.exception.BadRequestException;
 import com.library.exception.ErrorCode;
-import com.library.exception.ResourceNotFoundException;
 import com.library.mapper.InventoryMapper;
 import com.library.repository.BookRepository;
 import com.library.repository.BranchRepository;
@@ -82,12 +82,16 @@ public class InventoryServiceImpl implements InventoryService {
         // Bước 5: Khởi tạo danh sách đối tượng Inventory với các giá trị mặc định đã thống nhất
         List<Inventory> newInventories = new ArrayList<>();
         for (Book book : booksToInit) {
+            DisplayStatus initStatus = (branch.getStatus() == BranchStatus.CLOSED || book.getStatus() == DisplayStatus.HIDE)
+                    ? DisplayStatus.HIDE
+                    : DisplayStatus.UNHIDE;
+
             Inventory inventory = Inventory.builder()
                     .branch(branch)
                     .book(book)
                     .totalQuantity(0)
                     .availableQuantity(0)
-                    .status(DisplayStatus.UNHIDE)
+                    .status(initStatus)
                     .shelfLocation(null)
                     .build();
             newInventories.add(inventory);
@@ -101,8 +105,9 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     /**
-     * Lấy danh sách tồn kho sách phân trang kèm theo bộ lọc tìm kiếm và sắp xếp (Public).
-     * Sử dụng JOIN FETCH đa tầng để tối ưu hiệu năng và tránh N+1 query.
+     * Lấy danh sách tồn kho sách phân trang kèm theo bộ lọc tìm kiếm và sắp xếp.
+     * Sử dụng Native SQL Query và @SqlResultSetMapping "InventoryPageResponseMapping" để
+     * tối ưu hóa hiệu năng, giảm tải bộ nhớ RAM và không nạp Entity vào Hibernate context.
      *
      * @param filter Bộ lọc tìm kiếm và phân trang
      * @return Trang kết quả chứa danh sách InventoryResponseDto
@@ -110,41 +115,13 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional(readOnly = true)
     public Page<InventoryResponseDto> getAllInventories(InventoryFilterRequestForm filter) {
-        // Bước 1: Khởi tạo Specification từ filter form (đã bao gồm JOIN FETCH đa tầng)
-        Specification<Inventory> spec = InventorySpecification.filter(filter);
+        // Bước 1: Khởi tạo thông tin phân trang Pageable
+        int page = (filter != null && filter.getPage() >= 0) ? filter.getPage() : 0;
+        int size = (filter != null && filter.getSize() > 0) ? filter.getSize() : 10;
+        Pageable pageable = PageRequest.of(page, size);
 
-        // Bước 2: Xác định hướng và trường sắp xếp (Sort) - mặc định theo updated_at từ cũ -> mới nhất (ASC)
-        Sort.Direction direction = (filter.getSortDir() != null && "desc".equalsIgnoreCase(filter.getSortDir()))
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
-
-        String rawSortBy = (filter.getSortBy() != null && !filter.getSortBy().trim().isEmpty())
-                ? filter.getSortBy().trim()
-                : "updatedAt";
-
-        // Ánh xạ các trường sắp xếp sang đường dẫn thuộc tính thực thể tương ứng
-        String sortBy = switch (rawSortBy) {
-            case "bookTitle" -> "book.title";
-            case "price" -> "book.price";
-            case "rentalPrice" -> "book.rentalPrice";
-            case "fineAmount" -> "book.fineAmount";
-            case "categoryName" -> "book.category.name";
-            case "branchName" -> "branch.name";
-            default -> rawSortBy;
-        };
-
-        Sort sort = Sort.by(direction, sortBy);
-
-        // Bước 3: Khởi tạo Pageable
-        int page = Math.max(filter.getPage(), 0);
-        int size = filter.getSize() > 0 ? filter.getSize() : 10;
-        Pageable pageable = PageRequest.of(page, size, sort);
-
-        // Bước 4: Thực hiện truy vấn kết hợp Specification và phân trang
-        Page<Inventory> inventoryPage = inventoryRepository.findAll(spec, pageable);
-
-        // Bước 5: Ánh xạ kết quả sang DTO bằng MapStruct
-        return inventoryPage.map(inventoryMapper::toDto);
+        // Bước 2: Thực hiện truy vấn trực tiếp bằng Native Query và ánh xạ sang DTO qua @SqlResultSetMapping
+        return inventoryRepository.findAllInventoriesNative(filter, pageable);
     }
 
     /**
@@ -180,7 +157,7 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryResponseDto updateInventory(Long id, InventoryUpdateRequestForm form) {
         // Bước 1: Tìm bản ghi tồn kho theo ID
         Inventory inventory = inventoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi tồn kho với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.INVENTORY_NOT_FOUND_BY_ID, id));
 
         // Bước 2: Cập nhật vị trí kệ nếu có truyền vào
         if (form.getShelfLocation() != null) {
@@ -189,6 +166,18 @@ public class InventoryServiceImpl implements InventoryService {
 
         // Bước 3: Cập nhật trạng thái hiển thị nếu có truyền vào
         if (form.getStatus() != null) {
+            if (form.getStatus() == DisplayStatus.UNHIDE) {
+                // Kiểm tra ràng buộc: đầu sách phải đang ở trạng thái hiển thị
+                if (inventory.getBook() != null && inventory.getBook().getStatus() == DisplayStatus.HIDE) {
+                    throw new BadRequestException("Không thể chuyển tồn kho sang trạng thái hiển thị (UNHIDE) vì đầu sách '"
+                            + inventory.getBook().getTitle() + "' đang ở trạng thái ẩn (HIDE). Vui lòng hiển thị đầu sách trước!");
+                }
+                // Kiểm tra ràng buộc: chi nhánh không được ở trạng thái đóng cửa
+                if (inventory.getBranch() != null && inventory.getBranch().getStatus() == BranchStatus.CLOSED) {
+                    throw new BadRequestException("Không thể chuyển tồn kho sang trạng thái hiển thị (UNHIDE) vì chi nhánh '"
+                            + inventory.getBranch().getName() + "' đang đóng cửa (CLOSED). Vui lòng mở lại chi nhánh trước!");
+                }
+            }
             inventory.setStatus(form.getStatus());
         }
 
@@ -209,10 +198,23 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryResponseDto changeInventoryStatus(Long id, DisplayStatus status) {
         // Bước 1: Tìm bản ghi tồn kho theo ID
         Inventory inventory = inventoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi tồn kho với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.INVENTORY_NOT_FOUND_BY_ID, id));
 
-        // Bước 2: Gán trạng thái mới
-        inventory.setStatus(status != null ? status : DisplayStatus.UNHIDE);
+        // Bước 2: Kiểm tra ràng buộc và gán trạng thái mới
+        DisplayStatus newStatus = status != null ? status : DisplayStatus.UNHIDE;
+        if (newStatus == DisplayStatus.UNHIDE) {
+            // Kiểm tra ràng buộc: đầu sách phải đang ở trạng thái hiển thị
+            if (inventory.getBook() != null && inventory.getBook().getStatus() == DisplayStatus.HIDE) {
+                throw new BadRequestException("Không thể chuyển tồn kho sang trạng thái hiển thị (UNHIDE) vì đầu sách '"
+                        + inventory.getBook().getTitle() + "' đang ở trạng thái ẩn (HIDE). Vui lòng hiển thị đầu sách trước!");
+            }
+            // Kiểm tra ràng buộc: chi nhánh không được ở trạng thái đóng cửa
+            if (inventory.getBranch() != null && inventory.getBranch().getStatus() == BranchStatus.CLOSED) {
+                throw new BadRequestException("Không thể chuyển tồn kho sang trạng thái hiển thị (UNHIDE) vì chi nhánh '"
+                        + inventory.getBranch().getName() + "' đang đóng cửa (CLOSED). Vui lòng mở lại chi nhánh trước!");
+            }
+        }
+        inventory.setStatus(newStatus);
 
         // Bước 3: Lưu và trả về kết quả
         Inventory savedInventory = inventoryRepository.save(inventory);
@@ -232,7 +234,7 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryResponseDto importStock(Long id, InventoryImportRequestForm form) {
         // Bước 1: Tìm bản ghi tồn kho theo ID
         Inventory inventory = inventoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi tồn kho với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.INVENTORY_NOT_FOUND_BY_ID, id));
 
         // Bước 2: Kiểm tra số lượng nhập hợp lệ
         if (form.getQuantity() == null || form.getQuantity() <= 0) {

@@ -5,6 +5,8 @@ import com.library.dto.auth.LoginResponseDto;
 import com.library.requestform.account.LoginRequestForm;
 import com.library.service.AuthService;
 import com.library.service.impl.JwtServiceImpl;
+import com.library.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -39,6 +41,9 @@ class AuthControllerTest {
     @MockBean
     private JwtServiceImpl jwtService;
 
+    @MockBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
     @Test
     void testLoginSuccessSetsCookies() throws Exception {
         LoginRequestForm form = LoginRequestForm.builder()
@@ -47,6 +52,9 @@ class AuthControllerTest {
                 .build();
 
         LoginResponseDto responseDto = LoginResponseDto.builder()
+                .username("testuser123")
+                .fullName("Nguyễn Văn A")
+                .role("ROLE_CUSTOMER")
                 .accessToken("mock.access.token")
                 .refreshToken("mock.refresh.token")
                 .build();
@@ -78,6 +86,49 @@ class AuthControllerTest {
                 .andExpect(cookie().value("refreshToken", "mock.refresh.token"))
                 .andExpect(cookie().httpOnly("refreshToken", true))
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data").doesNotExist());
+                .andExpect(jsonPath("$.data.username").value("testuser123"))
+                .andExpect(jsonPath("$.data.fullName").value("Nguyễn Văn A"))
+                .andExpect(jsonPath("$.data.role").value("ROLE_CUSTOMER"));
+    }
+
+    @Test
+    void testRefreshTokenSuccessSetsCookies() throws Exception {
+        LoginResponseDto responseDto = LoginResponseDto.builder()
+                .username("testuser123")
+                .fullName("Nguyễn Văn A")
+                .role("ROLE_CUSTOMER")
+                .accessToken("new.mock.access.token")
+                .refreshToken("new.mock.refresh.token")
+                .build();
+
+        when(authService.refreshToken(eq("valid.refresh.token"))).thenReturn(responseDto);
+
+        ResponseCookie accessCookie = ResponseCookie.from("accessToken", "new.mock.access.token")
+                .httpOnly(true)
+                .path("/")
+                .maxAge(Duration.ofMillis(86400000))
+                .build();
+
+        ResponseCookie refreshCookie = ResponseCookie.from("refreshToken", "new.mock.refresh.token")
+                .httpOnly(true)
+                .path("/")
+                .maxAge(Duration.ofMillis(604800000))
+                .build();
+
+        when(jwtService.createAccessTokenCookie(eq("new.mock.access.token"))).thenReturn(accessCookie);
+        when(jwtService.createRefreshTokenCookie(eq("new.mock.refresh.token"))).thenReturn(refreshCookie);
+
+        mockMvc.perform(post("/public/auth/refresh")
+                        .cookie(new Cookie("refreshToken", "valid.refresh.token")))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("Set-Cookie"))
+                .andExpect(cookie().value("accessToken", "new.mock.access.token"))
+                .andExpect(cookie().httpOnly("accessToken", true))
+                .andExpect(cookie().value("refreshToken", "new.mock.refresh.token"))
+                .andExpect(cookie().httpOnly("refreshToken", true))
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.username").value("testuser123"))
+                .andExpect(jsonPath("$.data.fullName").value("Nguyễn Văn A"))
+                .andExpect(jsonPath("$.data.role").value("ROLE_CUSTOMER"));
     }
 }

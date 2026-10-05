@@ -56,6 +56,11 @@ public class BorrowSlipFilterRequestForm {
     private String customerSearch;
 
     /**
+     * Lọc chính xác theo ID khách hàng (customerId).
+     */
+    private Long customerId;
+
+    /**
      * Lọc theo ID chi nhánh thư viện.
      */
     private Long branchId;

@@ -97,19 +97,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Bắt lỗi 404: Không tìm thấy tài nguyên theo ID, Code,...
-     */
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(ResourceNotFoundException ex) {
-        ApiResponse<Void> response = ApiResponse.error(
-                HttpStatus.NOT_FOUND.value(),
-                ex.getMessage(),
-                "RESOURCE_NOT_FOUND"
-        );
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-    }
-
-    /**
      * Bắt lỗi 400: Nghiệp vụ không hợp lệ (trùng lặp dữ liệu, tài khoản bị khóa,...)
      */
     @ExceptionHandler(BadRequestException.class)

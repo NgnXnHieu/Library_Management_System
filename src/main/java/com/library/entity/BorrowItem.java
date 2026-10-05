@@ -12,6 +12,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
+
 /**
  * Thực thể chi tiết mượn sách thuộc phiếu mượn (BorrowItem).
  * Đại diện cho số lượng sách mượn từ tồn kho của chi nhánh.
@@ -35,4 +37,10 @@ public class BorrowItem extends BaseEntity {
 
     @Column(name = "quantity", nullable = false)
     private Integer quantity;
+
+    /**
+     * Đơn giá thuê của một cuốn sách được chốt tại thời điểm lập phiếu mượn.
+     */
+    @Column(name = "rental_price", precision = 12, scale = 2)
+    private BigDecimal rentalPrice;
 }

@@ -13,6 +13,7 @@ import jakarta.servlet.http.Cookie;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -98,5 +99,35 @@ class SecurityIntegrationTest {
                         .header(SecurityConstants.AUTHORIZATION_HEADER, SecurityConstants.BEARER_PREFIX + invalidToken))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+    }
+
+    /**
+     * Kiểm tra endpoint dành riêng cho ADMIN (/categories - POST)
+     * khi tài khoản có Role CUSTOMER gọi sẽ bị chặn với mã HTTP 403 FORBIDDEN ngay tại Security Filter.
+     */
+    @Test
+    void testAdminPostEndpointAccessedByCustomerReturnsForbidden() throws Exception {
+        String token = "customer.token";
+        Long accountId = 99L;
+
+        UserDetailCustom customerDetails = UserDetailCustom.builder()
+                .accountId(accountId)
+                .userId(99L)
+                .roleCode("CUSTOMER")
+                .username("customer_test")
+                .fullName("Khách hàng")
+                .build();
+
+        when(jwtService.isTokenValid(token)).thenReturn(true);
+        when(jwtService.isAccessToken(token)).thenReturn(true);
+        when(jwtService.extractAccountId(token)).thenReturn(accountId);
+        when(jwtService.getUserDetailsByAccountId(accountId, token)).thenReturn(customerDetails);
+
+        mockMvc.perform(post("/categories")
+                        .cookie(new Cookie(SecurityConstants.ACCESS_TOKEN_COOKIE_NAME, token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Test\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
     }
 }

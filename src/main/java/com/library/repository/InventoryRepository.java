@@ -1,8 +1,11 @@
 package com.library.repository;
 
+import com.library.dto.book.BookBranchInventoryDto;
 import com.library.entity.Inventory;
+import com.library.enums.DisplayStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,7 +18,33 @@ import java.util.Optional;
  * Repository thao tác với bảng inventories trong Database.
  */
 @Repository
-public interface InventoryRepository extends JpaRepository<Inventory, Long>, JpaSpecificationExecutor<Inventory> {
+public interface InventoryRepository extends JpaRepository<Inventory, Long>, JpaSpecificationExecutor<Inventory>, InventoryRepositoryCustom {
+
+    /**
+     * Lấy thông tin tồn kho sách tại một chi nhánh cụ thể (dành cho khách hàng).
+     * Chỉ lấy chi nhánh đang OPEN và trạng thái tồn kho UNHIDE.
+     * Sử dụng Named Native Query "Inventory.findCustomerInventoriesByBookAndBranch" và @SqlResultSetMapping "BookBranchInventoryMapping".
+     *
+     * @param bookId   ID của đầu sách
+     * @param branchId ID của chi nhánh
+     * @return Danh sách DTO tồn kho chi nhánh
+     */
+    @Query(name = "Inventory.findCustomerInventoriesByBookAndBranch", nativeQuery = true)
+    List<BookBranchInventoryDto> findCustomerInventoriesByBookAndBranch(
+            @Param("bookId") Long bookId,
+            @Param("branchId") Long branchId
+    );
+
+    /**
+     * Lấy toàn bộ thông tin tồn kho sách tại tất cả các chi nhánh đang mở (dành cho khách hàng).
+     * Chỉ lấy chi nhánh đang OPEN và trạng thái tồn kho UNHIDE, sắp xếp theo tên chi nhánh.
+     * Sử dụng Named Native Query "Inventory.findAllCustomerInventoriesByBook" và @SqlResultSetMapping "BookBranchInventoryMapping".
+     *
+     * @param bookId ID của đầu sách
+     * @return Danh sách DTO tồn kho chi nhánh
+     */
+    @Query(name = "Inventory.findAllCustomerInventoriesByBook", nativeQuery = true)
+    List<BookBranchInventoryDto> findAllCustomerInventoriesByBook(@Param("bookId") Long bookId);
 
     /**
      * Lấy danh sách ID các cuốn sách đã có trong kho của một chi nhánh.
@@ -70,4 +99,37 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long>, Jpa
      * @param bookId ID cuốn sách
      */
     void deleteAllByBookId(Long bookId);
+
+    /**
+     * Cập nhật trạng thái hiển thị của tất cả tồn kho thuộc chi nhánh chỉ định.
+     * Dùng khi cập nhật chi nhánh sang trạng thái CLOSED.
+     *
+     * @param branchId ID chi nhánh
+     * @param status   Trạng thái hiển thị mới
+     */
+    @Modifying
+    @Query("UPDATE Inventory i SET i.status = :status WHERE i.branch.id = :branchId")
+    void updateStatusByBranchId(@Param("branchId") Long branchId, @Param("status") DisplayStatus status);
+
+    /**
+     * Cập nhật trạng thái hiển thị của tất cả tồn kho thuộc cuốn sách chỉ định.
+     * Dùng khi cập nhật sách sang trạng thái HIDE.
+     *
+     * @param bookId ID cuốn sách
+     * @param status Trạng thái hiển thị mới
+     */
+    @Modifying
+    @Query("UPDATE Inventory i SET i.status = :status WHERE i.book.id = :bookId")
+    void updateStatusByBookId(@Param("bookId") Long bookId, @Param("status") DisplayStatus status);
+
+    /**
+     * Cập nhật trạng thái hiển thị của tất cả tồn kho thuộc các sách của thể loại chỉ định.
+     * Dùng khi cập nhật thể loại sang trạng thái HIDE.
+     *
+     * @param categoryId ID thể loại
+     * @param status     Trạng thái hiển thị mới
+     */
+    @Modifying
+    @Query("UPDATE Inventory i SET i.status = :status WHERE i.book.id IN (SELECT b.id FROM Book b WHERE b.category.id = :categoryId)")
+    void updateStatusByBookCategoryId(@Param("categoryId") Long categoryId, @Param("status") DisplayStatus status);
 }

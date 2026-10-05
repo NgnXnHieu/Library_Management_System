@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.format.annotation.DateTimeFormat;
+
+import java.time.LocalDateTime;
 
 /**
  * Form tiếp nhận các tham số tìm kiếm, lọc và phân trang danh sách chi nhánh (Branch).
@@ -41,6 +44,18 @@ public class BranchFilterRequestForm {
      * Lọc theo trạng thái hoạt động của chi nhánh (OPEN, CLOSED)
      */
     private BranchStatus status;
+
+    /**
+     * Lọc theo thời gian mượn: từ thời điểm (ISO-8601, ví dụ: 2026-10-05T00:00:00).
+     */
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+    private LocalDateTime fromDate;
+
+    /**
+     * Lọc theo thời gian mượn: đến thời điểm (ISO-8601, ví dụ: 2026-10-05T23:59:59).
+     */
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+    private LocalDateTime toDate;
 
     /**
      * Số trang hiện tại (bắt đầu từ 0)

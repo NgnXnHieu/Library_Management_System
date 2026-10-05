@@ -3,6 +3,7 @@ package com.library.requestform.book;
 import com.library.enums.DisplayStatus;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +16,8 @@ import java.math.BigDecimal;
 /**
  * Request form cập nhật thông tin đầu sách.
  * Tất cả các trường đều là tùy chọn (optional).
- * Các trường không truyền (mang giá trị null) sẽ được giữ nguyên dữ liệu hiện tại trong Database.
+ * Các trường không truyền (mang giá trị null) sẽ được giữ nguyên dữ liệu hiện
+ * tại trong Database.
  */
 @Getter
 @Setter

@@ -32,6 +32,9 @@ public enum ErrorCode {
     PHONE_ALREADY_EXISTS("PHONE_ALREADY_EXISTS", "Số điện thoại '%s' đã được đăng ký trên hệ thống!", HttpStatus.BAD_REQUEST),
     USER_NOT_FOUND("USER_NOT_FOUND", "Không tìm thấy thông tin người dùng!", HttpStatus.NOT_FOUND),
     USER_NOT_FOUND_BY_ID("USER_NOT_FOUND_BY_ID", "Không tìm thấy người dùng với ID: %s", HttpStatus.NOT_FOUND),
+    USER_NOT_FOUND_BY_EMAIL("USER_NOT_FOUND_BY_EMAIL", "Không tìm thấy người dùng với email: %s", HttpStatus.NOT_FOUND),
+    CUSTOMER_NOT_FOUND_BY_ID("CUSTOMER_NOT_FOUND_BY_ID", "Không tìm thấy khách hàng với ID: %s", HttpStatus.NOT_FOUND),
+    STAFF_NOT_FOUND_BY_ID("STAFF_NOT_FOUND_BY_ID", "Không tìm thấy nhân viên với ID: %s", HttpStatus.NOT_FOUND),
 
     // =========================================================================
     // 3. CÁC MÃ LỖI VAI TRÒ (ROLE) (2000 - 2999)
@@ -46,6 +49,7 @@ public enum ErrorCode {
     BRANCH_NOT_FOUND("BRANCH_NOT_FOUND", "Không tìm thấy chi nhánh với ID: %s", HttpStatus.NOT_FOUND),
     BRANCH_ALREADY_EXISTS("BRANCH_ALREADY_EXISTS", "Chi nhánh với mã '%s' đã tồn tại!", HttpStatus.BAD_REQUEST),
     BRANCH_CANNOT_DELETE("BRANCH_CANNOT_DELETE", "Không thể xóa chi nhánh '%s' vì đang có người dùng thuộc chi nhánh này!", HttpStatus.BAD_REQUEST),
+    BRANCH_CLOSED("BRANCH_CLOSED", "Chi nhánh '%s' hiện đang tạm thời đóng cửa!", HttpStatus.BAD_REQUEST),
 
     // =========================================================================
     // 5. CÁC MÃ LỖI THỂ LOẠI (CATEGORY) (4000 - 4999)
@@ -58,9 +62,16 @@ public enum ErrorCode {
     // 6. CÁC MÃ LỖI SÁCH (BOOK) & TẬP TIN (FILE) (5000 - 5999)
     // =========================================================================
     BOOK_NOT_FOUND("BOOK_NOT_FOUND", "Không tìm thấy sách với ID: %s", HttpStatus.NOT_FOUND),
+    BOOK_HIDDEN("BOOK_HIDDEN", "Sách '%s' hiện đang tạm ẩn và không khả dụng cho độc giả!", HttpStatus.BAD_REQUEST),
     BOOK_ALREADY_EXISTS("BOOK_ALREADY_EXISTS", "Mã ISBN '%s' đã tồn tại trên hệ thống!", HttpStatus.BAD_REQUEST),
     BOOK_CANNOT_DELETE("BOOK_CANNOT_DELETE", "Không thể xóa sách '%s' vì đã phát sinh giao dịch mượn sách!", HttpStatus.BAD_REQUEST),
-    INVALID_FILE("INVALID_FILE", "%s", HttpStatus.BAD_REQUEST);
+    INVALID_FILE("INVALID_FILE", "%s", HttpStatus.BAD_REQUEST),
+
+    // =========================================================================
+    // 7. CÁC MÃ LỖI TỒN KHO (INVENTORY) & MƯỢN TRẢ (BORROW SLIP) (6000 - 6999)
+    // =========================================================================
+    INVENTORY_NOT_FOUND_BY_ID("INVENTORY_NOT_FOUND_BY_ID", "Không tìm thấy bản ghi tồn kho với ID: %s", HttpStatus.NOT_FOUND),
+    BORROW_SLIP_NOT_FOUND("BORROW_SLIP_NOT_FOUND", "Không tìm thấy phiếu mượn với ID: %s", HttpStatus.NOT_FOUND);
 
     /**
      * Mã lỗi định danh (dùng để trả về cho Frontend/Client phân biệt)

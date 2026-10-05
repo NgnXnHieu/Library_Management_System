@@ -92,6 +92,11 @@ public final class BorrowSlipSpecification {
                 predicates.add(cb.equal(root.get("branch").get("id"), filter.getBranchId()));
             }
 
+            // Bước 6.1: Lọc theo ID khách hàng cụ thể
+            if (filter.getCustomerId() != null) {
+                predicates.add(cb.equal(root.get("customer").get("id"), filter.getCustomerId()));
+            }
+
             // Bước 7: Lọc theo trạng thái phiếu mượn (BORROWED, RETURNED, OVERDUE)
             if (filter.getStatus() != null) {
                 predicates.add(cb.equal(root.get("status"), filter.getStatus()));

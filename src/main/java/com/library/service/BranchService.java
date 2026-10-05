@@ -1,6 +1,7 @@
 package com.library.service;
 
 import com.library.dto.branch.BranchResponseDto;
+import com.library.dto.branch.BranchStatisticResponseDto;
 import com.library.enums.BranchStatus;
 import com.library.requestform.branch.BranchCreateRequestForm;
 import com.library.requestform.branch.BranchFilterRequestForm;
@@ -54,4 +55,13 @@ public interface BranchService {
      * @return Danh sách các enum BranchStatus
      */
     List<BranchStatus> getBranchStatuses();
+
+    /**
+     * Lấy danh sách phân trang thống kê chi nhánh (dành riêng cho ADMIN).
+     *
+     * @param filter Bộ lọc tìm kiếm và phân trang
+     * @return Trang kết quả chứa danh sách BranchStatisticResponseDto
+     */
+    Page<BranchStatisticResponseDto> getBranchStatistics(BranchFilterRequestForm filter);
 }
+

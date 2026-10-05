@@ -1,6 +1,7 @@
 package com.library.service;
 
 import com.library.dto.user.UserResponseDto;
+import com.library.requestform.user.CustomerFilterRequestForm;
 import com.library.requestform.user.UserAdminFilterRequestForm;
 import com.library.requestform.user.UserFilterRequestForm;
 import com.library.requestform.user.UserUpdateRequestForm;
@@ -47,4 +48,13 @@ public interface UserService {
      * @return Danh sách DTO độc giả thỏa mãn
      */
     List<UserResponseDto> filterCustomers(UserFilterRequestForm filter);
+
+    /**
+     * Lấy danh sách phân trang người dùng có vai trò là khách hàng (CUSTOMER) kèm các tiêu chí lọc:
+     * username, fullName, phone, email, status và phân trang, sắp xếp.
+     *
+     * @param filter Form chứa các tiêu chí lọc và phân trang khách hàng
+     * @return Trang kết quả chứa danh sách UserResponseDto
+     */
+    Page<UserResponseDto> getCustomersWithFilter(CustomerFilterRequestForm filter);
 }

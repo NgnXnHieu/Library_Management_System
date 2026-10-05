@@ -1,5 +1,6 @@
 package com.library.service;
 
+import com.library.dto.book.BookDetailCustomerResponseDto;
 import com.library.dto.book.BookResponseDto;
 import com.library.requestform.book.BookCreateRequestForm;
 import com.library.requestform.book.BookFilterRequestForm;
@@ -27,6 +28,15 @@ public interface BookService {
      * @return Trang kết quả chứa danh sách BookResponseDto
      */
     Page<BookResponseDto> getAllBooks(BookFilterRequestForm filter);
+
+    /**
+     * Lấy thông tin chi tiết một đầu sách kèm danh sách tồn kho theo chi nhánh (Public dành cho khách hàng).
+     *
+     * @param bookId   ID của đầu sách cần xem (bắt buộc)
+     * @param branchId ID chi nhánh cần xem tồn kho (tùy chọn)
+     * @return DTO thông tin chi tiết sách kèm tồn kho chi nhánh
+     */
+    BookDetailCustomerResponseDto getBookDetailForCustomer(Long bookId, Long branchId);
 
     /**
      * Cập nhật thông tin đầu sách theo ID (Chỉ dành cho ADMIN).

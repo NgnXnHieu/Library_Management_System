@@ -1,13 +1,17 @@
 package com.library.service.impl;
 
 import com.library.dto.branch.BranchResponseDto;
+import com.library.dto.branch.BranchStatisticResponseDto;
 import com.library.entity.Branch;
+import com.library.enums.BorrowStatus;
 import com.library.enums.BranchStatus;
+import com.library.enums.DisplayStatus;
 import com.library.enums.Role;
 import com.library.exception.AppException;
 import com.library.exception.ErrorCode;
 import com.library.mapper.BranchMapper;
 import com.library.repository.BranchRepository;
+import com.library.repository.InventoryRepository;
 import com.library.repository.UserRepository;
 import com.library.requestform.branch.BranchCreateRequestForm;
 import com.library.requestform.branch.BranchFilterRequestForm;
@@ -40,6 +44,7 @@ public class BranchServiceImpl implements BranchService {
 
     private final BranchRepository branchRepository;
     private final UserRepository userRepository;
+    private final InventoryRepository inventoryRepository;
     private final BranchMapper branchMapper;
 
     /**
@@ -126,7 +131,12 @@ public class BranchServiceImpl implements BranchService {
 
         Branch updatedBranch = branchRepository.save(branch);
 
-        // Bước 6: Chuyển đổi sang DTO và trả về
+        // Bước 6: Nếu chi nhánh chuyển sang trạng thái CLOSED -> Tự động cập nhật tất cả tồn kho thuộc chi nhánh này sang HIDE
+        if (updatedBranch.getStatus() == BranchStatus.CLOSED) {
+            inventoryRepository.updateStatusByBranchId(updatedBranch.getId(), DisplayStatus.HIDE);
+        }
+
+        // Bước 7: Chuyển đổi sang DTO và trả về
         return branchMapper.toDto(updatedBranch);
     }
 
@@ -248,5 +258,50 @@ public class BranchServiceImpl implements BranchService {
         // {
         // throw new AppException(ErrorCode.ACCESS_DENIED);
         // }
+    }
+
+    /**
+     * Lấy danh sách phân trang thống kê chi nhánh (dành riêng cho ADMIN).
+     * Bao gồm: số lượng sách trong kho, số sách còn, số sách đang mượn, lượt mượn và doanh thu.
+     * Sử dụng JPQL Constructor Expression tối ưu truy vấn chiếu trực tiếp lên BranchStatisticResponseDto.
+     *
+     * @param filter Bộ lọc chứa code, name, status và tham số phân trang
+     * @return Trang kết quả phân trang chứa DTO thống kê chi nhánh
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BranchStatisticResponseDto> getBranchStatistics(BranchFilterRequestForm filter) {
+        // Bước 1: Chuẩn hóa tham số bộ lọc nếu client gửi null
+        if (filter == null) {
+            filter = new BranchFilterRequestForm();
+        }
+
+        // Bước 2: Xác định trường sắp xếp an toàn (mặc định createdAt)
+        String sortBy = filter.getSortBy();
+        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy.trim())) {
+            sortBy = "createdAt";
+        } else {
+            sortBy = sortBy.trim();
+        }
+
+        // Bước 3: Xác định hướng sắp xếp (mặc định desc: mới nhất lên đầu)
+        Sort.Direction direction = "asc".equalsIgnoreCase(filter.getSortDir())
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
+        // Bước 4: Tạo đối tượng Pageable của Spring Data JPA
+        int pageNumber = Math.max(0, filter.getPage());
+        int pageSize = Math.max(1, filter.getSize());
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by(direction, sortBy));
+
+        // Bước 5: Định nghĩa danh sách các trạng thái phiếu mượn hợp lệ được tính thống kê
+        List<BorrowStatus> borrowStatuses = List.of(
+                BorrowStatus.BORROWED,
+                BorrowStatus.RETURNED,
+                BorrowStatus.OVERDUE
+        );
+
+        // Bước 6: Gọi truy vấn JPQL Constructor Expression qua Repository
+        return branchRepository.findBranchStatisticsWithFilter(filter, borrowStatuses, pageable);
     }
 }

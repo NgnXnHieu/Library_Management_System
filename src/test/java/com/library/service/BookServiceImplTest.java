@@ -5,10 +5,12 @@ import com.library.entity.Book;
 import com.library.entity.Category;
 import com.library.enums.DisplayStatus;
 import com.library.exception.AppException;
+import com.library.exception.BadRequestException;
 import com.library.exception.ErrorCode;
 import com.library.mapper.BookMapper;
 import com.library.repository.BookRepository;
 import com.library.repository.CategoryRepository;
+import com.library.repository.InventoryRepository;
 import com.library.requestform.book.BookUpdateRequestForm;
 import com.library.service.impl.BookServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +27,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -42,6 +45,9 @@ class BookServiceImplTest {
     private CategoryRepository categoryRepository;
 
     @Mock
+    private InventoryRepository inventoryRepository;
+
+    @Mock
     private BookMapper bookMapper;
 
     @InjectMocks
@@ -54,6 +60,7 @@ class BookServiceImplTest {
     void setUp() {
         existingCategory = Category.builder()
                 .name("Công nghệ thông tin")
+                .status(DisplayStatus.UNHIDE)
                 .build();
         existingCategory.setId(1L);
 
@@ -165,5 +172,56 @@ class BookServiceImplTest {
         assertNotNull(result);
         assertEquals(2L, existingBook.getCategory().getId());
         verify(bookRepository).save(existingBook);
+    }
+
+    @Test
+    @DisplayName("Cập nhật sách sang trạng thái HIDE -> Tự động cập nhật tất cả tồn kho sang HIDE")
+    void testUpdateBook_StatusHide_CascadesToInventory() {
+        BookUpdateRequestForm form = BookUpdateRequestForm.builder()
+                .status(DisplayStatus.HIDE)
+                .build();
+
+        when(bookRepository.findById(10L)).thenReturn(Optional.of(existingBook));
+        doAnswer(invocation -> {
+            Book b = invocation.getArgument(1);
+            b.setStatus(DisplayStatus.HIDE);
+            return null;
+        }).when(bookMapper).updateEntityFromForm(eq(form), any(Book.class));
+
+        when(bookRepository.save(any(Book.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookResponseDto expectedDto = BookResponseDto.builder().id(10L).status(DisplayStatus.HIDE).build();
+        when(bookMapper.toDto(any(Book.class))).thenReturn(expectedDto);
+
+        BookResponseDto result = bookService.updateBook(10L, form);
+
+        assertNotNull(result);
+        assertEquals(DisplayStatus.HIDE, existingBook.getStatus());
+        verify(bookRepository).save(existingBook);
+        verify(inventoryRepository).updateStatusByBookId(10L, DisplayStatus.HIDE);
+    }
+
+    @Test
+    @DisplayName("Ném lỗi BadRequestException khi cập nhật sách sang UNHIDE nhưng thể loại đang là HIDE")
+    void testUpdateBook_UnhideWithHiddenCategory_ThrowsBadRequestException() {
+        existingCategory.setStatus(DisplayStatus.HIDE);
+        existingBook.setStatus(DisplayStatus.HIDE);
+
+        BookUpdateRequestForm form = BookUpdateRequestForm.builder()
+                .status(DisplayStatus.UNHIDE)
+                .build();
+
+        when(bookRepository.findById(10L)).thenReturn(Optional.of(existingBook));
+        doAnswer(invocation -> {
+            Book b = invocation.getArgument(1);
+            b.setStatus(DisplayStatus.UNHIDE);
+            return null;
+        }).when(bookMapper).updateEntityFromForm(eq(form), any(Book.class));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                bookService.updateBook(10L, form));
+
+        assertTrue(ex.getMessage().contains("thể loại 'Công nghệ thông tin' đang ở trạng thái ẩn (HIDE)"));
+        verify(bookRepository, never()).save(any(Book.class));
     }
 }

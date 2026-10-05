@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -70,5 +71,30 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, cleanAccessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, cleanRefreshCookie.toString())
                 .body(ApiResponse.success("Đăng xuất thành công!", null));
+    }
+
+    /**
+     * API Làm mới Token (Refresh Token):
+     * - Nhận refreshToken từ HttpOnly Cookie của Client
+     * - Gọi AuthService để kiểm tra tính hợp lệ và cấp cặp accessToken + refreshToken mới
+     * - Tạo 2 Cookie mới và gán vào header Set-Cookie trả về cho Frontend
+     * - Trả về thông tin cơ bản của tài khoản (username, fullName, role)
+     */
+    @PostMapping({"/public/auth/refresh", "/auth/refresh"})
+    public ResponseEntity<ApiResponse<LoginResponseDto>> refreshToken(
+            @CookieValue(name = "refreshToken", required = false) String refreshTokenCookie) {
+
+        // Bước 1: Gọi xuống tầng Service để kiểm tra refreshToken và tạo cặp token mới
+        LoginResponseDto responseDto = authService.refreshToken(refreshTokenCookie);
+
+        // Bước 2: Tạo HttpOnly Cookies mới cho accessToken và refreshToken
+        ResponseCookie accessCookie = jwtService.createAccessTokenCookie(responseDto.getAccessToken());
+        ResponseCookie refreshCookie = jwtService.createRefreshTokenCookie(responseDto.getRefreshToken());
+
+        // Bước 3: Đính kèm Cookies mới vào header Set-Cookie và trả về thông tin người dùng
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .body(ApiResponse.success("Làm mới token thành công!", responseDto));
     }
 }

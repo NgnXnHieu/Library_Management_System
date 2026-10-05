@@ -1,6 +1,8 @@
 package com.library.service.impl;
 
+import com.library.dto.borrow.BorrowItemResponseDto;
 import com.library.dto.borrow.BorrowSlipResponseDto;
+import com.library.entity.Account;
 import com.library.entity.BorrowItem;
 import com.library.entity.BorrowSlip;
 import com.library.entity.Branch;
@@ -12,9 +14,11 @@ import com.library.enums.BorrowStatus;
 import com.library.enums.PaymentMethod;
 import com.library.enums.PaymentPurpose;
 import com.library.enums.PaymentStatus;
+import com.library.exception.AppException;
 import com.library.exception.BadRequestException;
-import com.library.exception.ResourceNotFoundException;
+import com.library.exception.ErrorCode;
 import com.library.mapper.BorrowSlipMapper;
+import com.library.repository.AccountRepository;
 import com.library.repository.BorrowItemRepository;
 import com.library.repository.BorrowSlipRepository;
 import com.library.repository.BranchRepository;
@@ -24,6 +28,7 @@ import com.library.repository.UserRepository;
 import com.library.requestform.borrow.BorrowItemRequestForm;
 import com.library.requestform.borrow.BorrowSlipCreateRequestForm;
 import com.library.requestform.borrow.BorrowSlipFilterRequestForm;
+import com.library.security.UserDetailCustom;
 import com.library.service.BorrowSlipService;
 import com.library.specification.BorrowSlipSpecification;
 import com.library.util.SecurityUtil;
@@ -58,6 +63,7 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
     private final BorrowItemRepository borrowItemRepository;
     private final InventoryRepository inventoryRepository;
     private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
     private final BranchRepository branchRepository;
     private final PaymentRepository paymentRepository;
     private final BorrowSlipMapper borrowSlipMapper;
@@ -78,8 +84,7 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
     public BorrowSlipResponseDto createBorrowSlip(BorrowSlipCreateRequestForm form, Long branchId, Long staffId) {
         // Bước 1: Kiểm tra khách hàng tồn tại và đang hoạt động
         User customer = userRepository.findById(form.getCustomerId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy khách hàng với ID: " + form.getCustomerId()));
+                .orElseThrow(() -> new AppException(ErrorCode.CUSTOMER_NOT_FOUND_BY_ID, form.getCustomerId()));
 
         if (customer.getStatus() != null && customer.getStatus() != AccountStatus.ACTIVE) {
             throw new BadRequestException("Tài khoản khách hàng đang bị khóa hoặc ngừng hoạt động!");
@@ -87,11 +92,11 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
 
         // Bước 2: Kiểm tra nhân viên tạo phiếu tồn tại
         User staff = userRepository.findById(staffId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhân viên với ID: " + staffId));
+                .orElseThrow(() -> new AppException(ErrorCode.STAFF_NOT_FOUND_BY_ID, staffId));
 
         // Bước 3: Kiểm tra chi nhánh thực hiện mượn sách tồn tại
         Branch branch = branchRepository.findById(branchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chi nhánh với ID: " + branchId));
+                .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND, branchId));
 
         // Bước 4: Kiểm tra danh sách sách mượn không rỗng và tổng hợp số lượng mượn
         // theo từng inventoryId trên RAM
@@ -208,14 +213,19 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
 
         BorrowSlip savedBorrowSlip = borrowSlipRepository.save(borrowSlip);
 
-        // Bước 9: Tạo các chi tiết mượn sách tương ứng (BorrowItem)
+        // Bước 9: Tạo các chi tiết mượn sách tương ứng (BorrowItem) kèm đơn giá chốt tại thời điểm mượn
         List<BorrowItem> borrowItems = new ArrayList<>();
         for (Map.Entry<Long, Integer> entry : requestedQuantityMap.entrySet()) {
             Inventory inventory = inventoryMap.get(entry.getKey());
+            BigDecimal itemRentalPrice = (inventory.getBook() != null && inventory.getBook().getRentalPrice() != null)
+                    ? inventory.getBook().getRentalPrice()
+                    : BigDecimal.ZERO;
+
             BorrowItem borrowItem = BorrowItem.builder()
                     .borrowSlip(savedBorrowSlip)
                     .inventory(inventory)
                     .quantity(entry.getValue())
+                    .rentalPrice(itemRentalPrice)
                     .build();
             borrowItems.add(borrowItem);
         }
@@ -278,23 +288,21 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
     @Override
     @Transactional(readOnly = true)
     public Page<BorrowSlipResponseDto> getAllBorrowSlips(BorrowSlipFilterRequestForm filter) {
-        // Bước 1: Khởi tạo Specification từ filter form (đã bao gồm JOIN FETCH tránh
-        // N+1 Query)
-        Specification<BorrowSlip> spec = BorrowSlipSpecification.filter(filter);
+        if (filter == null) {
+            filter = new BorrowSlipFilterRequestForm();
+        }
 
-        // Bước 2: Xác định hướng và trường sắp xếp (Sort) - mặc định theo ngày mượn
-        // (borrowedAt) từ cũ -> mới (ASC)
-        Sort.Direction direction = (filter != null && filter.getSortDir() != null
+        // Bước 1: Xác định hướng và trường sắp xếp (Sort) - mặc định theo ngày mượn (borrowedAt) từ cũ -> mới (ASC)
+        Sort.Direction direction = (filter.getSortDir() != null
                 && "desc".equalsIgnoreCase(filter.getSortDir()))
                         ? Sort.Direction.DESC
                         : Sort.Direction.ASC;
 
-        String rawSortBy = (filter != null && filter.getSortBy() != null && !filter.getSortBy().trim().isEmpty())
+        String rawSortBy = (filter.getSortBy() != null && !filter.getSortBy().trim().isEmpty())
                 ? filter.getSortBy().trim()
                 : "borrowedAt";
 
-        // Ánh xạ các trường sắp xếp theo yêu cầu: ngày mượn (borrowedAt), ngày trả
-        // (returnedAt), giá tiền (totalAmount)
+        // Ánh xạ các trường sắp xếp theo yêu cầu: ngày mượn (borrowedAt), ngày trả (returnedAt), giá tiền (totalAmount)
         String sortBy = switch (rawSortBy) {
             case "returnedAt" -> "returnedAt";
             case "totalAmount" -> "totalAmount";
@@ -303,16 +311,40 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
 
         Sort sort = Sort.by(direction, sortBy);
 
-        // Bước 3: Khởi tạo Pageable
-        int page = (filter != null && filter.getPage() >= 0) ? filter.getPage() : 0;
-        int size = (filter != null && filter.getSize() > 0) ? filter.getSize() : 10;
+        // Bước 2: Khởi tạo Pageable
+        int page = filter.getPage() >= 0 ? filter.getPage() : 0;
+        int size = filter.getSize() > 0 ? filter.getSize() : 10;
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Bước 4: Thực hiện truy vấn kết hợp Specification và phân trang
-        Page<BorrowSlip> borrowSlipPage = borrowSlipRepository.findAll(spec, pageable);
+        // Bước 3: Thực hiện truy vấn phân trang JPQL Constructor Expression chiếu trực tiếp lên DTO
+        Page<BorrowSlipResponseDto> borrowSlipPage = borrowSlipRepository.findAllBorrowSlipsWithFilter(filter, pageable);
 
-        // Bước 5: Ánh xạ kết quả sang DTO qua MapStruct
-        return borrowSlipPage.map(borrowSlipMapper::toDto);
+        if (borrowSlipPage.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        // Bước 4: Trích xuất danh sách ID của các phiếu mượn trong trang hiện tại
+        List<Long> borrowSlipIds = borrowSlipPage.getContent().stream()
+                .map(BorrowSlipResponseDto::getId)
+                .toList();
+
+        // Bước 5: Truy vấn bảng borrow_items theo danh sách ID (kết hợp JOIN FETCH inventory và book)
+        List<BorrowItem> borrowItems = borrowItemRepository.findAllByBorrowSlipIdInWithBook(borrowSlipIds);
+
+        // Bước 6: Gom nhóm và ánh xạ các borrowItem sang BorrowItemResponseDto theo borrowSlipId vào Map
+        Map<Long, List<BorrowItemResponseDto>> itemsBySlipId = borrowItems.stream()
+                .collect(Collectors.groupingBy(
+                        item -> item.getBorrowSlip().getId(),
+                        Collectors.mapping(borrowSlipMapper::toBorrowItemDto, Collectors.toList())
+                ));
+
+        // Bước 7: Gán danh sách items tương ứng vào từng BorrowSlipResponseDto cho frontend
+        borrowSlipPage.forEach(slip -> {
+            List<BorrowItemResponseDto> slipItems = itemsBySlipId.getOrDefault(slip.getId(), new ArrayList<>());
+            slip.setItems(slipItems);
+        });
+
+        return borrowSlipPage;
     }
 
     /**
@@ -356,7 +388,7 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
     public BorrowSlipResponseDto cancelBorrowSlip(Long id) {
         // Bước 1: Kiểm tra phiếu mượn có tồn tại hay không
         BorrowSlip borrowSlip = borrowSlipRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.BORROW_SLIP_NOT_FOUND, id));
 
         // Bước 2: Kiểm tra trạng thái phiếu mượn (chỉ cho phép hủy khi đang ở trạng
         // thái BORROWED)
@@ -448,7 +480,7 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
 
         // Bước 2: Kiểm tra phiếu mượn có tồn tại hay không
         BorrowSlip borrowSlip = borrowSlipRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.BORROW_SLIP_NOT_FOUND, id));
 
         BorrowStatus oldStatus = borrowSlip.getStatus();
         if (oldStatus == status) {
@@ -540,7 +572,7 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
 
         // Bước 2: Kiểm tra phiếu mượn có tồn tại hay không
         BorrowSlip borrowSlip = borrowSlipRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.BORROW_SLIP_NOT_FOUND, id));
 
         // Bước 3: Trích xuất branchId của tài khoản nhân viên/quản lý đang đăng nhập từ SecurityContextHolder
         Long currentBranchId = SecurityUtil.getCurrentBranchId()
@@ -622,5 +654,47 @@ public class BorrowSlipServiceImpl implements BorrowSlipService {
         String timestamp = String.valueOf(System.currentTimeMillis());
         String suffix = UUID.randomUUID().toString().substring(0, 4).toUpperCase();
         return "PAY-" + timestamp + "-" + suffix;
+    }
+
+    /**
+     * Lấy danh sách phiếu mượn phân trang kèm chi tiết sách (borrowItems) cho tài khoản đang đăng nhập.
+     * Tự động trích xuất accountId, username từ SecurityContextHolder để kiểm tra trạng thái tồn tại và khóa tài khoản,
+     * sau đó lọc chính xác theo userId của người dùng.
+     *
+     * @param filter Bộ lọc trạng thái mượn, trạng thái thanh toán, sắp xếp ngày mượn/trả và phân trang
+     * @return Trang kết quả chứa danh sách phiếu mượn của người dùng hiện tại
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BorrowSlipResponseDto> getMyBorrowSlips(BorrowSlipFilterRequestForm filter) {
+        // Bước 1: Trích xuất thông tin người dùng đang đăng nhập từ SecurityContextHolder
+        UserDetailCustom currentUser = SecurityUtil.getCurrentUserOrThrow();
+        Long accountId = currentUser.getAccountId();
+        String username = currentUser.getUsername();
+
+        // Bước 2: Kiểm tra Account trong Database có tồn tại và có bị khóa không
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
+
+        if ("LOCKED".equalsIgnoreCase(account.getStatus()) || "INACTIVE".equalsIgnoreCase(account.getStatus())) {
+            throw new AppException(ErrorCode.ACCOUNT_INACTIVE_OR_LOCKED);
+        }
+
+        // Bước 3: Kiểm tra User trong Database có tồn tại và có bị khóa không
+        User user = userRepository.findById(currentUser.getUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getStatus() == AccountStatus.LOCKED || user.getStatus() == AccountStatus.INACTIVE) {
+            throw new AppException(ErrorCode.ACCOUNT_INACTIVE_OR_LOCKED);
+        }
+
+        // Bước 4: Thiết lập customerId bắt buộc vào bộ lọc là userId của người dùng hiện tại
+        if (filter == null) {
+            filter = new BorrowSlipFilterRequestForm();
+        }
+        filter.setCustomerId(user.getId());
+
+        // Bước 5: Gọi hàm truy vấn phân trang chung kết hợp Specification đã tối ưu JOIN FETCH và @BatchSize
+        return getAllBorrowSlips(filter);
     }
 }

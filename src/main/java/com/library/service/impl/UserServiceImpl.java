@@ -5,12 +5,14 @@ import com.library.entity.Branch;
 import com.library.entity.Role;
 import com.library.entity.User;
 import com.library.enums.AccountStatus;
+import com.library.exception.AppException;
 import com.library.exception.BadRequestException;
-import com.library.exception.ResourceNotFoundException;
+import com.library.exception.ErrorCode;
 import com.library.mapper.UserMapper;
 import com.library.repository.BranchRepository;
 import com.library.repository.RoleRepository;
 import com.library.repository.UserRepository;
+import com.library.requestform.user.CustomerFilterRequestForm;
 import com.library.requestform.user.UserAdminFilterRequestForm;
 import com.library.requestform.user.UserFilterRequestForm;
 import com.library.requestform.user.UserUpdateRequestForm;
@@ -41,7 +43,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public UserResponseDto getUserById(Long id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND_BY_ID, id));
         return userMapper.toDto(user);
     }
 
@@ -49,7 +51,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public UserResponseDto getUserByEmail(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + email));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND_BY_EMAIL, email));
         return userMapper.toDto(user);
     }
 
@@ -79,7 +81,7 @@ public class UserServiceImpl implements UserService {
     public UserResponseDto updateUser(Long id, UserUpdateRequestForm form) {
         // Bước 1: Tìm người dùng cần cập nhật theo ID
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND_BY_ID, id));
 
         // Bước 2: Xác định vai trò của người thực hiện (Current User) và người được sửa (Target User)
         String currentUserRole = SecurityUtil.getCurrentRoleCode()
@@ -129,7 +131,7 @@ public class UserServiceImpl implements UserService {
             if (!newRoleCode.equals(targetUserRole)) {
                 Role newRole = roleRepository.findByCode(newRoleCode)
                         .or(() -> roleRepository.findByCode("ROLE_" + newRoleCode))
-                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò: " + newRoleCode));
+                        .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND, newRoleCode));
                 user.setRole(newRole);
             }
         }
@@ -137,7 +139,7 @@ public class UserServiceImpl implements UserService {
         // Bước 5: Kiểm tra và cập nhật chi nhánh nếu có truyền branchId
         if (form.getBranchId() != null) {
             Branch branch = branchRepository.findById(form.getBranchId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chi nhánh với ID: " + form.getBranchId()));
+                    .orElseThrow(() -> new AppException(ErrorCode.BRANCH_NOT_FOUND, form.getBranchId()));
             user.setBranch(branch);
         }
 
@@ -167,7 +169,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changeUserStatus(Long id, String status) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND_BY_ID, id));
         user.setStatus(status != null ? AccountStatus.valueOf(status.trim().toUpperCase()) : null);
         userRepository.save(user);
     }
@@ -176,7 +178,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND_BY_ID, id));
         userRepository.delete(user);
     }
 
@@ -212,15 +214,16 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponseDto> getUsersWithFilter(UserAdminFilterRequestForm filter) {
-        // Bước 1: Khởi tạo Specification từ filter form (đã bao gồm JOIN FETCH account, branch, role)
-        Specification<User> spec = UserSpecification.filterAdmin(filter);
+        if (filter == null) {
+            filter = new UserAdminFilterRequestForm();
+        }
 
-        // Bước 2: Xác định hướng sắp xếp (mặc định DESC - mới nhất lên đầu)
+        // Bước 1: Xác định hướng sắp xếp (mặc định DESC - mới nhất lên đầu)
         Sort.Direction direction = (filter.getSortDir() != null && "asc".equalsIgnoreCase(filter.getSortDir()))
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
 
-        // Bước 3: Xác định trường sắp xếp (chuẩn hóa thuộc tính cho trường hợp liên kết)
+        // Bước 2: Xác định trường sắp xếp (chuẩn hóa thuộc tính cho trường hợp liên kết)
         String sortByProperty = "createdAt";
         if (filter.getSortBy() != null && !filter.getSortBy().trim().isEmpty()) {
             String rawSort = filter.getSortBy().trim();
@@ -238,21 +241,19 @@ public class UserServiceImpl implements UserService {
         }
         Sort sort = Sort.by(direction, sortByProperty);
 
-        // Bước 4: Khởi tạo đối tượng phân trang Pageable
+        // Bước 3: Khởi tạo đối tượng phân trang Pageable
         int page = Math.max(filter.getPage(), 0);
         int size = filter.getSize() > 0 ? filter.getSize() : 10;
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Bước 5: Thực hiện truy vấn kết hợp Specification và phân trang
-        Page<User> userPage = userRepository.findAll(spec, pageable);
-
-        // Bước 6: Ánh xạ kết quả sang DTO bằng MapStruct
-        return userPage.map(userMapper::toDto);
+        // Bước 4: Thực hiện truy vấn JPQL Constructor Expression trực tiếp lên DTO
+        return userRepository.findUsersWithFilter(filter, pageable);
     }
 
     /**
      * Lấy danh sách độc giả (role CUSTOMER, status ACTIVE) phục vụ tìm kiếm lập phiếu mượn.
-     * Áp đặt nghiệp vụ role CUSTOMER và status ACTIVE tại tầng Service, truyền vào Specification động.
+     * Sử dụng @SqlResultSetMapping ("CustomerSearchMapping") và Native Query để chỉ lấy đúng các trường cần thiết,
+     * tối ưu hiệu năng cho thao tác autocomplete và không nạp Entity vào bộ nhớ.
      *
      * @param filter Bộ lọc chứa từ khóa tìm kiếm (search: username, fullName, phone, email)
      * @return Danh sách DTO người dùng thỏa mãn
@@ -260,23 +261,60 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<UserResponseDto> filterCustomers(UserFilterRequestForm filter) {
-        // Bước 1: Khởi tạo filter nếu null và thiết lập nghiệp vụ role CUSTOMER, status ACTIVE
+        // Bước 1: Trích xuất và chuẩn hóa từ khóa tìm kiếm
+        String search = (filter != null && filter.getSearch() != null && !filter.getSearch().trim().isEmpty())
+                ? filter.getSearch().trim()
+                : null;
+
+        // Bước 2: Thực hiện truy vấn trực tiếp bằng Native Query và ánh xạ sang DTO qua @SqlResultSetMapping
+        return userRepository.findActiveCustomersBySearch(search);
+    }
+
+    /**
+     * Lấy danh sách phân trang người dùng có vai trò là khách hàng (CUSTOMER) kèm các tiêu chí lọc:
+     * username, fullName, phone, email, status và phân trang, sắp xếp.
+     *
+     * @param filter Form chứa các tiêu chí lọc và phân trang khách hàng
+     * @return Trang kết quả chứa danh sách UserResponseDto
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponseDto> getCustomersWithFilter(CustomerFilterRequestForm filter) {
         if (filter == null) {
-            filter = new UserFilterRequestForm();
+            filter = new CustomerFilterRequestForm();
         }
-        filter.setRole("CUSTOMER");
-        filter.setStatus(AccountStatus.ACTIVE);
 
-        // Bước 2: Tạo Specification động từ filter
-        Specification<User> spec = UserSpecification.filter(filter);
+        // Bước 1: Xác định hướng sắp xếp (mặc định DESC - mới nhất lên đầu)
+        Sort.Direction direction = (filter.getSortDir() != null && "asc".equalsIgnoreCase(filter.getSortDir()))
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
 
-        // Bước 3: Sắp xếp theo họ tên độc giả tăng dần (fullName ASC)
-        Sort sort = Sort.by(Sort.Direction.ASC, "fullName");
+        // Bước 2: Xác định trường sắp xếp (chuẩn hóa thuộc tính cho trường hợp liên kết)
+        String sortByProperty = "createdAt";
+        if (filter.getSortBy() != null && !filter.getSortBy().trim().isEmpty()) {
+            String rawSort = filter.getSortBy().trim();
+            if ("username".equalsIgnoreCase(rawSort)) {
+                sortByProperty = "account.username";
+            } else if ("created_at".equalsIgnoreCase(rawSort) || "createdAt".equalsIgnoreCase(rawSort)) {
+                sortByProperty = "createdAt";
+            } else if ("fullName".equalsIgnoreCase(rawSort) || "fullname".equalsIgnoreCase(rawSort)) {
+                sortByProperty = "fullName";
+            } else if ("phone".equalsIgnoreCase(rawSort)) {
+                sortByProperty = "phone";
+            } else if ("email".equalsIgnoreCase(rawSort)) {
+                sortByProperty = "email";
+            } else {
+                sortByProperty = rawSort;
+            }
+        }
+        Sort sort = Sort.by(direction, sortByProperty);
 
-        // Bước 4: Truy vấn cơ sở dữ liệu
-        List<User> users = userRepository.findAll(spec, sort);
+        // Bước 3: Khởi tạo đối tượng phân trang Pageable
+        int page = Math.max(filter.getPage(), 0);
+        int size = filter.getSize() > 0 ? filter.getSize() : 10;
+        Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Bước 5: Chuyển đổi sang danh sách DTO qua MapStruct
-        return userMapper.toDtoList(users);
+        // Bước 4: Thực hiện truy vấn JPQL Constructor Expression trực tiếp lên DTO
+        return userRepository.findCustomersWithFilter(filter, pageable);
     }
 }

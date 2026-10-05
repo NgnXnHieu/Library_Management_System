@@ -1,14 +1,19 @@
 package com.library.entity;
 
+import com.library.dto.book.BookDetailCustomerResponseDto;
 import com.library.enums.DisplayStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.ColumnResult;
+import jakarta.persistence.ConstructorResult;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedNativeQuery;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.SqlResultSetMapping;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +26,40 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+@NamedNativeQuery(
+        name = "Book.findBookDetailCustomerById",
+        query = "SELECT b.id AS id, b.isbn AS isbn, b.title AS title, b.author AS author, " +
+                "b.publisher AS publisher, b.publication_year AS publicationYear, " +
+                "b.description AS description, b.cover_image_key AS coverImageKey, " +
+                "b.price AS price, b.rental_price AS rentalPrice, b.fine_amount AS fineAmount, " +
+                "b.status AS status, c.id AS categoryId, c.name AS categoryName " +
+                "FROM books b " +
+                "JOIN categories c ON b.category_id = c.id " +
+                "WHERE b.id = :bookId",
+        resultSetMapping = "BookDetailCustomerMapping"
+)
+@SqlResultSetMapping(
+        name = "BookDetailCustomerMapping",
+        classes = @ConstructorResult(
+                targetClass = BookDetailCustomerResponseDto.class,
+                columns = {
+                        @ColumnResult(name = "id", type = Long.class),
+                        @ColumnResult(name = "isbn", type = String.class),
+                        @ColumnResult(name = "title", type = String.class),
+                        @ColumnResult(name = "author", type = String.class),
+                        @ColumnResult(name = "publisher", type = String.class),
+                        @ColumnResult(name = "publicationYear", type = Integer.class),
+                        @ColumnResult(name = "description", type = String.class),
+                        @ColumnResult(name = "coverImageKey", type = String.class),
+                        @ColumnResult(name = "price", type = BigDecimal.class),
+                        @ColumnResult(name = "rentalPrice", type = BigDecimal.class),
+                        @ColumnResult(name = "fineAmount", type = BigDecimal.class),
+                        @ColumnResult(name = "status", type = String.class),
+                        @ColumnResult(name = "categoryId", type = Long.class),
+                        @ColumnResult(name = "categoryName", type = String.class)
+                }
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor

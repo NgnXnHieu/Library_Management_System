@@ -74,4 +74,13 @@ public interface BorrowSlipService {
      * @return DTO thông tin phiếu mượn sau khi cập nhật
      */
     BorrowSlipResponseDto updateBorrowSlipStatusForBranch(Long id, BorrowStatus status);
+
+    /**
+     * Lấy danh sách phiếu mượn phân trang kèm chi tiết sách (borrowItems) cho tài khoản đang đăng nhập.
+     * Tự động kiểm tra trạng thái tài khoản và người dùng từ SecurityContextHolder, lọc chính xác theo userId.
+     *
+     * @param filter Bộ lọc trạng thái mượn, trạng thái thanh toán, sắp xếp ngày mượn/trả và phân trang
+     * @return Trang kết quả chứa danh sách phiếu mượn của người dùng hiện tại
+     */
+    Page<BorrowSlipResponseDto> getMyBorrowSlips(BorrowSlipFilterRequestForm filter);
 }

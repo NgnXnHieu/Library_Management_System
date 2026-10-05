@@ -19,6 +19,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import org.hibernate.annotations.BatchSize;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -89,6 +91,7 @@ public class BorrowSlip extends BaseEntity {
     private BigDecimal totalAmount;
 
     @Builder.Default
+    @BatchSize(size = 25)
     @OneToMany(mappedBy = "borrowSlip", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<BorrowItem> borrowItems = new ArrayList<>();
 

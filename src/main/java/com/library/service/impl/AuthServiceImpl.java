@@ -21,6 +21,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
@@ -161,5 +162,89 @@ public class AuthServiceImpl implements AuthService {
 
         // Bước 4: Xóa sạch thông tin xác thực trong SecurityContextHolder
         SecurityContextHolder.clearContext();
+    }
+
+    /**
+     * Làm mới token (Refresh Token):
+     * - Kiểm tra chuỗi token không rỗng và đúng định dạng JWT
+     * - Kiểm tra chữ ký và hạn sử dụng chưa hết
+     * - Kiểm tra đúng loại tokenType là REFRESH
+     * - Kiểm tra tài khoản (Account) tồn tại và ACTIVE
+     * - Kiểm tra khớp với chuỗi refreshToken đang lưu trong Database
+     * - Kiểm tra thông tin người dùng (User) liên kết tồn tại và ACTIVE
+     * - Tạo mới cặp accessToken và refreshToken (Refresh Token Rotation)
+     * - Cập nhật cặp token mới vào Database
+     * - Trả về DTO thông tin tài khoản kèm cặp token mới để Controller ghi vào Cookie
+     */
+    @Override
+    @Transactional
+    public LoginResponseDto refreshToken(String refreshToken) {
+        // Bước 1: Kiểm tra chuỗi refreshToken gửi lên có hợp lệ không
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new BadRequestException("Refresh token không được để trống hoặc không tìm thấy trong Cookie!");
+        }
+
+        // Bước 2: Kiểm tra chữ ký và thời hạn của token
+        if (!jwtService.isTokenValid(refreshToken)) {
+            throw new BadRequestException("Phiên đăng nhập đã hết hạn hoặc Refresh token không hợp lệ! Vui lòng đăng nhập lại.");
+        }
+
+        // Bước 3: Kiểm tra loại token phải là REFRESH
+        if (!jwtService.isRefreshToken(refreshToken)) {
+            throw new BadRequestException("Mã token được gửi lên không phải là Refresh token hợp lệ!");
+        }
+
+        // Bước 4: Trích xuất accountId từ claims của token
+        Long accountId = jwtService.extractAccountId(refreshToken);
+        if (accountId == null) {
+            throw new BadRequestException("Không thể xác thực thông tin tài khoản từ Refresh token!");
+        }
+
+        // Bước 5: Tìm kiếm tài khoản trong DB và kiểm tra trạng thái
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy tài khoản liên kết với token này!"));
+
+        if (!"ACTIVE".equalsIgnoreCase(account.getStatus())) {
+            throw new BadRequestException("Tài khoản của bạn đã bị khóa hoặc chưa được kích hoạt!");
+        }
+
+        // Bước 6: Kiểm tra token gửi lên có khớp với refreshToken lưu trong DB không
+        if (account.getRefreshToken() == null || !account.getRefreshToken().equals(refreshToken.trim())) {
+            throw new BadRequestException("Phiên đăng nhập không hợp lệ hoặc tài khoản đã đăng nhập ở thiết bị khác!");
+        }
+
+        // Bước 7: Kiểm tra thông tin người dùng (User) liên kết
+        User user = userRepository.findByAccountIdWithDetails(accountId)
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy thông tin người dùng liên kết với tài khoản!"));
+
+        if (user.getStatus() != null && user.getStatus() != AccountStatus.ACTIVE) {
+            throw new BadRequestException("Tài khoản người dùng đã bị khóa hoặc ngừng hoạt động!");
+        }
+
+        // Bước 8: Tạo cặp Access Token và Refresh Token mới (Refresh Token Rotation)
+        String newAccessToken = jwtService.generateAccessToken(account.getId());
+        String newRefreshToken = jwtService.generateRefreshToken(account.getId());
+
+        // Bước 9: Cập nhật token mới vào database
+        account.setToken(newAccessToken);
+        account.setRefreshToken(newRefreshToken);
+        accountRepository.save(account);
+
+        // Bước 10: Trích xuất Role và họ tên của User để trả về
+        String roleCode = "ROLE_CUSTOMER";
+        if (user.getRole() != null && user.getRole().getCode() != null) {
+            String code = user.getRole().getCode().trim().toUpperCase();
+            roleCode = code.startsWith("ROLE_") ? code : "ROLE_" + code;
+        }
+
+        String fullName = (user.getFullName() != null) ? user.getFullName() : account.getUsername();
+
+        return LoginResponseDto.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .username(account.getUsername())
+                .fullName(fullName)
+                .role(roleCode)
+                .build();
     }
 }

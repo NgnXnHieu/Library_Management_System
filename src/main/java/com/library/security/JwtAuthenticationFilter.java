@@ -71,8 +71,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     // Gọi hàm getUserDetailsByAccountId để:
                     // 1. Kiểm tra tài khoản (Account) tồn tại trong DB và ở trạng thái ACTIVE
-                    // 2. So sánh chuỗi token hiện tại với token lưu trong DB (đảm bảo token chưa bị đăng xuất/ghi đè)
-                    // 3. Kiểm tra thông tin người dùng (User) liên kết tồn tại và ở trạng thái ACTIVE
+                    // 2. So sánh chuỗi token hiện tại với token lưu trong DB (đảm bảo token chưa bị
+                    // đăng xuất/ghi đè)
+                    // 3. Kiểm tra thông tin người dùng (User) liên kết tồn tại và ở trạng thái
+                    // ACTIVE
                     // 4. Lấy thông tin Role, Branch, FullName và đóng gói thành UserDetailCustom
                     UserDetailCustom userDetails = jwtService.getUserDetailsByAccountId(accountId, token);
 
@@ -86,7 +88,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     );
 
                     // Gán thêm chi tiết môi trường request (IP, Session ID, v.v.)
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    // authentication.setDetails(new
+                    // WebAuthenticationDetailsSource().buildDetails(request));
 
                     // Lưu đối tượng Authentication vào SecurityContextHolder để các tầng sau sử
                     // dụng

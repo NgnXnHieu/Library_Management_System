@@ -2,6 +2,7 @@ package com.library.controller;
 
 import com.library.dto.ApiResponse;
 import com.library.dto.category.CategoryResponseDto;
+import com.library.dto.category.CategorySimpleDto;
 import com.library.enums.DisplayStatus;
 import com.library.requestform.category.CategoryCreateRequestForm;
 import com.library.requestform.category.CategoryFilterRequestForm;
@@ -87,6 +88,18 @@ public class CategoryController {
     public ResponseEntity<ApiResponse<List<CategoryResponseDto>>> getAllCategories() {
         List<CategoryResponseDto> categories = categoryService.getAllCategories();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách thể loại thành công!", categories));
+    }
+
+    /**
+     * API công khai lấy danh sách các thể loại đang hiển thị công khai (status = UNHIDE) cho khách hàng.
+     * Trả về danh sách rút gọn chỉ gồm categoryId và categoryName, phục vụ menu dropdown ngang.
+     *
+     * @return Danh sách CategorySimpleDto bọc trong ApiResponse
+     */
+    @GetMapping("/public/categories/active")
+    public ResponseEntity<ApiResponse<List<CategorySimpleDto>>> getActiveCategories() {
+        List<CategorySimpleDto> categories = categoryService.getActiveCategories();
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách thể loại hiển thị thành công!", categories));
     }
 
     /**
