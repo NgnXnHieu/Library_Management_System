@@ -4,6 +4,8 @@ import com.library.dto.ApiResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
@@ -88,6 +91,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
         ErrorCode errorCode = ex.getErrorCode();
+        log.warn("Ngoại lệ nghiệp vụ AppException [{}]: {}", errorCode.getCode(), ex.getMessage());
         ApiResponse<Void> response = ApiResponse.error(
                 errorCode.getHttpStatus().value(),
                 ex.getMessage(),
@@ -101,6 +105,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadRequestException(BadRequestException ex) {
+        log.warn("Ngoại lệ BadRequestException: {}", ex.getMessage());
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.BAD_REQUEST.value(),
                 ex.getMessage(),
@@ -125,6 +130,8 @@ public class GlobalExceptionHandler {
                         (msg1, msg2) -> msg1 + ", " + msg2,
                         LinkedHashMap::new
                 ));
+
+        log.warn("Dữ liệu đầu vào không hợp lệ (MethodArgumentNotValidException): {}", fieldErrors);
 
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.BAD_REQUEST.value(),
@@ -151,6 +158,8 @@ public class GlobalExceptionHandler {
                         LinkedHashMap::new
                 ));
 
+        log.warn("Tham số không thỏa mãn ràng buộc (ConstraintViolationException): {}", fieldErrors);
+
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.BAD_REQUEST.value(),
                 "Tham số đầu vào không thỏa mãn điều kiện ràng buộc!",
@@ -176,6 +185,8 @@ public class GlobalExceptionHandler {
         String message = String.format("Tham số '%s' nhận giá trị '%s' không hợp lệ. Vui lòng truyền kiểu dữ liệu '%s'!",
                 paramName, providedValue, expectedType);
 
+        log.warn("Sai kiểu dữ liệu tham số (MethodArgumentTypeMismatchException): {}", message);
+
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.BAD_REQUEST.value(),
                 message,
@@ -192,6 +203,8 @@ public class GlobalExceptionHandler {
         String message = String.format("Thiếu tham số bắt buộc '%s' (kiểu %s) trên URL!",
                 ex.getParameterName(), ex.getParameterType());
 
+        log.warn("Thiếu tham số bắt buộc (MissingServletRequestParameterException): {}", message);
+
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.BAD_REQUEST.value(),
                 message,
@@ -205,6 +218,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        log.warn("Dữ liệu request JSON không hợp lệ (HttpMessageNotReadableException): {}", ex.getMessage());
+
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.BAD_REQUEST.value(),
                 "Dữ liệu gửi lên bị thiếu hoặc định dạng JSON không hợp lệ. Vui lòng kiểm tra lại!",
@@ -225,6 +240,8 @@ public class GlobalExceptionHandler {
 
         String message = String.format("Đường dẫn này không hỗ trợ phương thức '%s'. Các phương thức được hỗ trợ: %s.",
                 unsupportedMethod, supportedMethods);
+
+        log.warn("Phương thức HTTP không được hỗ trợ (HttpRequestMethodNotSupportedException): {}", message);
 
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.METHOD_NOT_ALLOWED.value(),
@@ -247,6 +264,8 @@ public class GlobalExceptionHandler {
         String message = String.format("Định dạng dữ liệu '%s' không được hỗ trợ. Vui lòng gửi dữ liệu dưới định dạng: %s.",
                 unsupportedType, supportedTypes);
 
+        log.warn("Định dạng dữ liệu không được hỗ trợ (HttpMediaTypeNotSupportedException): {}", message);
+
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(),
                 message,
@@ -260,6 +279,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(NoResourceFoundException ex) {
+        log.warn("Đường dẫn tài nguyên không tồn tại (NoResourceFoundException): {}", ex.getResourcePath());
+
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.NOT_FOUND.value(),
                 "Đường dẫn '" + ex.getResourcePath() + "' không tồn tại trên hệ thống!",
@@ -282,6 +303,52 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
+    // =========================================================================
+    // 5. CÁC EXCEPTION CƠ SỞ DỮ LIỆU, TẬP TIN & HẠ TẦNG (DB, UPLOAD, REDIS)
+    // =========================================================================
+
+    /**
+     * Bắt lỗi vi phạm ràng buộc toàn vẹn CSDL (trùng Unique Key, dính khóa ngoại Foreign Key, v.v.)
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("Vi phạm ràng buộc toàn vẹn cơ sở dữ liệu (DataIntegrityViolationException): {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.error(
+                HttpStatus.CONFLICT.value(),
+                "Dữ liệu bị trùng lặp hoặc vi phạm ràng buộc toàn vẹn cơ sở dữ liệu!",
+                "DATA_INTEGRITY_VIOLATION"
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
+     * Bắt lỗi dung lượng tập tin tải lên vượt quá giới hạn tối đa cho phép
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
+        log.warn("Tập tin tải lên vượt quá dung lượng tối đa cho phép (MaxUploadSizeExceededException): {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.error(
+                HttpStatus.BAD_REQUEST.value(),
+                "Dung lượng tập tin tải lên vượt quá giới hạn tối đa cho phép!",
+                "MAX_UPLOAD_SIZE_EXCEEDED"
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Bắt lỗi mất kết nối hoặc gián đoạn dịch vụ Redis Cache
+     */
+    @ExceptionHandler(RedisConnectionFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRedisConnectionFailure(RedisConnectionFailureException ex) {
+        log.error("Mất kết nối tới máy chủ Redis Cache (RedisConnectionFailureException): ", ex);
+        ApiResponse<Void> response = ApiResponse.error(
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "Dịch vụ bộ nhớ đệm (Redis) tạm thời không khả dụng, vui lòng thử lại sau!",
+                "REDIS_CONNECTION_FAILURE"
+        );
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+    }
+
     /**
      * Bắt lỗi NullPointerException
      */
@@ -297,18 +364,19 @@ public class GlobalExceptionHandler {
     }
 
     // =========================================================================
-    // 5. CATCH-ALL CHO CÁC EXCEPTION KHÔNG MONG MUỐN CÒN LẠI
+    // 6. CATCH-ALL CHO CÁC EXCEPTION KHÔNG MONG MUỐN CÒN LẠI (500)
     // =========================================================================
 
     /**
-     * Bắt tất cả các lỗi chưa được định nghĩa cụ thể phía trên (500 Internal Server Error)
+     * Bắt tất cả các lỗi chưa được định nghĩa cụ thể phía trên (500 Internal Server Error).
+     * Ẩn thông tin lỗi nhạy cảm với người dùng, ghi chi tiết vào log server.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneralException(Exception ex) {
         log.error("Lỗi không xác định (Internal Server Error): ", ex);
         ApiResponse<Void> response = ApiResponse.error(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                ex.getMessage() != null ? ex.getMessage() : "Đã xảy ra lỗi hệ thống ngoài ý muốn!",
+                "Đã xảy ra lỗi hệ thống ngoài ý muốn, vui lòng liên hệ quản trị viên!",
                 "INTERNAL_SERVER_ERROR"
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

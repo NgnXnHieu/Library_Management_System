@@ -15,6 +15,7 @@ import com.library.repository.UserRepository;
 import com.library.requestform.account.LoginRequestForm;
 import com.library.requestform.account.RegisterRequestForm;
 import com.library.service.AuthService;
+import com.library.service.RedisTokenService;
 import com.library.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
@@ -36,6 +38,7 @@ public class AuthServiceImpl implements AuthService {
     private final AccountMapper accountMapper;
     private final UserMapper userMapper;
     private final JwtServiceImpl jwtService;
+    private final RedisTokenService redisTokenService;
 
     @Override
     @Transactional
@@ -112,12 +115,15 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtService.generateAccessToken(account.getId());
         String refreshToken = jwtService.generateRefreshToken(account.getId());
 
-        // 5. Cập nhật thời gian đăng nhập gần nhất và lưu token, refreshToken vào
-        // database
+        // 5. Cập nhật thời gian đăng nhập gần nhất vào database (không lưu token vào MySQL nữa)
         account.setLastLoginAt(LocalDateTime.now());
-        account.setToken(accessToken);
-        account.setRefreshToken(refreshToken);
         accountRepository.save(account);
+
+        // 6. Lưu Access Token (TTL: 5 phút) và Refresh Token (TTL: 7 ngày) vào Redis Cache
+        Duration accessTtl = Duration.ofMillis(jwtService.getAccessTokenExpiration());
+        Duration refreshTtl = Duration.ofMillis(jwtService.getRefreshTokenExpiration());
+        redisTokenService.saveAccessToken(account.getId(), accessToken, accessTtl);
+        redisTokenService.saveRefreshToken(account.getId(), refreshToken, refreshTtl);
 
         // 6. Trích xuất Role và họ tên của User để trả về cho Frontend
         String roleCode = "ROLE_CUSTOMER";
@@ -147,18 +153,15 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logout() {
-        // Bước 1: Lấy accountId của người dùng hiện tại từ SecurityUtil (sẽ ném
-        // exception 401 nếu chưa đăng nhập)
+        // Bước 1: Lấy accountId của người dùng hiện tại từ SecurityUtil (sẽ ném exception 401 nếu chưa đăng nhập)
         Long currentAccountId = SecurityUtil.getRequiredAccountId();
 
-        // Bước 2: Tìm kiếm tài khoản trong database
-        Account account = accountRepository.findById(currentAccountId)
+        // Bước 2: Kiểm tra tài khoản có tồn tại trong database không
+        accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new BadRequestException("Không tìm thấy tài khoản với ID: " + currentAccountId));
 
-        // Bước 3: Xóa token và refreshToken đã lưu trong tài khoản để vô hiệu hóa
-        account.setToken(null);
-        account.setRefreshToken(null);
-        accountRepository.save(account);
+        // Bước 3: Xóa sạch cặp token trong Redis để vô hiệu hóa phiên làm việc ngay lập tức
+        redisTokenService.deleteTokens(currentAccountId);
 
         // Bước 4: Xóa sạch thông tin xác thực trong SecurityContextHolder
         SecurityContextHolder.clearContext();
@@ -170,10 +173,11 @@ public class AuthServiceImpl implements AuthService {
      * - Kiểm tra chữ ký và hạn sử dụng chưa hết
      * - Kiểm tra đúng loại tokenType là REFRESH
      * - Kiểm tra tài khoản (Account) tồn tại và ACTIVE
-     * - Kiểm tra khớp với chuỗi refreshToken đang lưu trong Database
+     * - Kiểm tra khớp với chuỗi refreshToken đang lưu trong Redis Cache
      * - Kiểm tra thông tin người dùng (User) liên kết tồn tại và ACTIVE
+     * - Xóa cặp token cũ trong Redis
      * - Tạo mới cặp accessToken và refreshToken (Refresh Token Rotation)
-     * - Cập nhật cặp token mới vào Database
+     * - Lưu cặp token mới vào Redis Cache
      * - Trả về DTO thông tin tài khoản kèm cặp token mới để Controller ghi vào Cookie
      */
     @Override
@@ -208,9 +212,10 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Tài khoản của bạn đã bị khóa hoặc chưa được kích hoạt!");
         }
 
-        // Bước 6: Kiểm tra token gửi lên có khớp với refreshToken lưu trong DB không
-        if (account.getRefreshToken() == null || !account.getRefreshToken().equals(refreshToken.trim())) {
-            throw new BadRequestException("Phiên đăng nhập không hợp lệ hoặc tài khoản đã đăng nhập ở thiết bị khác!");
+        // Bước 6: Kiểm tra token gửi lên có khớp với refreshToken đang lưu trong Redis Cache không
+        String cachedRefreshToken = redisTokenService.getRefreshToken(accountId);
+        if (cachedRefreshToken == null || !cachedRefreshToken.equals(refreshToken.trim())) {
+            throw new BadRequestException("Phiên đăng nhập đã hết hạn hoặc tài khoản đã đăng nhập ở thiết bị khác!");
         }
 
         // Bước 7: Kiểm tra thông tin người dùng (User) liên kết
@@ -225,10 +230,13 @@ public class AuthServiceImpl implements AuthService {
         String newAccessToken = jwtService.generateAccessToken(account.getId());
         String newRefreshToken = jwtService.generateRefreshToken(account.getId());
 
-        // Bước 9: Cập nhật token mới vào database
-        account.setToken(newAccessToken);
-        account.setRefreshToken(newRefreshToken);
-        accountRepository.save(account);
+        // Bước 9: Xóa token cũ và lưu cặp token mới vào Redis Cache kèm TTL
+        redisTokenService.deleteTokens(accountId);
+
+        Duration accessTtl = Duration.ofMillis(jwtService.getAccessTokenExpiration());
+        Duration refreshTtl = Duration.ofMillis(jwtService.getRefreshTokenExpiration());
+        redisTokenService.saveAccessToken(account.getId(), newAccessToken, accessTtl);
+        redisTokenService.saveRefreshToken(account.getId(), newRefreshToken, refreshTtl);
 
         // Bước 10: Trích xuất Role và họ tên của User để trả về
         String roleCode = "ROLE_CUSTOMER";

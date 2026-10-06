@@ -7,6 +7,7 @@ import com.library.exception.BadRequestException;
 import com.library.repository.AccountRepository;
 import com.library.repository.UserRepository;
 import com.library.security.UserDetailCustom;
+import com.library.service.RedisTokenService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -29,6 +30,7 @@ public class JwtServiceImpl {
     private final long refreshTokenExpiration;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final RedisTokenService redisTokenService;
 
     @Autowired
     public JwtServiceImpl(
@@ -36,17 +38,17 @@ public class JwtServiceImpl {
             @Value("${jwt.access-expiration}") long accessTokenExpiration,
             @Value("${jwt.refresh-expiration}") long refreshTokenExpiration,
             AccountRepository accountRepository,
-            UserRepository userRepository
-    ) {
+            UserRepository userRepository,
+            RedisTokenService redisTokenService) {
 
         this.signingKey = Keys.hmacShaKeyFor(
-                Decoders.BASE64.decode(secret)
-        );
+                Decoders.BASE64.decode(secret));
 
         this.accessTokenExpiration = accessTokenExpiration;
         this.refreshTokenExpiration = refreshTokenExpiration;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
+        this.redisTokenService = redisTokenService;
     }
 
     /**
@@ -55,11 +57,21 @@ public class JwtServiceImpl {
     public JwtServiceImpl(
             String secret,
             long accessTokenExpiration,
-            long refreshTokenExpiration
-    ) {
-        this(secret, accessTokenExpiration, refreshTokenExpiration, null, null);
+            long refreshTokenExpiration) {
+        this(secret, accessTokenExpiration, refreshTokenExpiration, null, null, null);
     }
 
+    /**
+     * Constructor phục vụ cho các unit test kiểm tra với repository mà không dùng Redis
+     */
+    public JwtServiceImpl(
+            String secret,
+            long accessTokenExpiration,
+            long refreshTokenExpiration,
+            AccountRepository accountRepository,
+            UserRepository userRepository) {
+        this(secret, accessTokenExpiration, refreshTokenExpiration, accountRepository, userRepository, null);
+    }
 
     public long getAccessTokenExpiration() {
         return accessTokenExpiration;
@@ -70,7 +82,8 @@ public class JwtServiceImpl {
     }
 
     /**
-     * Tạo ResponseCookie cho access token với thời gian sống trùng với accessTokenExpiration
+     * Tạo ResponseCookie cho access token với thời gian sống trùng với
+     * accessTokenExpiration
      */
     public ResponseCookie createAccessTokenCookie(String token) {
         return ResponseCookie.from("accessToken", token)
@@ -83,7 +96,8 @@ public class JwtServiceImpl {
     }
 
     /**
-     * Tạo ResponseCookie cho refresh token với thời gian sống trùng với refreshTokenExpiration
+     * Tạo ResponseCookie cho refresh token với thời gian sống trùng với
+     * refreshTokenExpiration
      */
     public ResponseCookie createRefreshTokenCookie(String token) {
         return ResponseCookie.from("refreshToken", token)
@@ -96,7 +110,8 @@ public class JwtServiceImpl {
     }
 
     /**
-     * Tạo ResponseCookie rỗng với maxAge = 0 để xóa cookie accessToken trên trình duyệt
+     * Tạo ResponseCookie rỗng với maxAge = 0 để xóa cookie accessToken trên trình
+     * duyệt
      */
     public ResponseCookie createCleanAccessTokenCookie() {
         return ResponseCookie.from("accessToken", "")
@@ -109,7 +124,8 @@ public class JwtServiceImpl {
     }
 
     /**
-     * Tạo ResponseCookie rỗng với maxAge = 0 để xóa cookie refreshToken trên trình duyệt
+     * Tạo ResponseCookie rỗng với maxAge = 0 để xóa cookie refreshToken trên trình
+     * duyệt
      */
     public ResponseCookie createCleanRefreshTokenCookie() {
         return ResponseCookie.from("refreshToken", "")
@@ -132,8 +148,7 @@ public class JwtServiceImpl {
                 .issuedAt(new Date())
                 .expiration(
                         new Date(System.currentTimeMillis()
-                                + accessTokenExpiration)
-                )
+                                + accessTokenExpiration))
                 .signWith(signingKey)
                 .compact();
     }
@@ -149,8 +164,7 @@ public class JwtServiceImpl {
                 .issuedAt(new Date())
                 .expiration(
                         new Date(System.currentTimeMillis()
-                                + refreshTokenExpiration)
-                )
+                                + refreshTokenExpiration))
                 .signWith(signingKey)
                 .compact();
     }
@@ -169,8 +183,7 @@ public class JwtServiceImpl {
     public String extractTokenType(String token) {
         return extractClaim(
                 token,
-                claims -> claims.get("tokenType", String.class)
-        );
+                claims -> claims.get("tokenType", String.class));
     }
 
     /**
@@ -185,8 +198,7 @@ public class JwtServiceImpl {
      */
     public <T> T extractClaim(
             String token,
-            Function<Claims, T> resolver
-    ) {
+            Function<Claims, T> resolver) {
         Claims claims = getClaims(token);
         return resolver.apply(claims);
     }
@@ -250,11 +262,13 @@ public class JwtServiceImpl {
     }
 
     /**
-     * Xác thực Account và User từ accountId, kiểm tra tính khớp của token với DB, lấy đầy đủ branchId và roleCode
+     * Xác thực Account và User từ accountId, kiểm tra tính khớp của token với DB,
+     * lấy đầy đủ branchId và roleCode
      * để gán vào UserDetailCustom phục vụ lưu trữ vào SecurityContext.
      *
      * @param accountId ID của tài khoản
-     * @param token     Chuỗi access token gửi lên từ client (nếu có để kiểm tra khớp với DB)
+     * @param token     Chuỗi access token gửi lên từ client (nếu có để kiểm tra
+     *                  khớp với DB)
      * @return UserDetailCustom chứa accountId, userId, branchId, roleCode
      */
     @Transactional(readOnly = true)
@@ -264,7 +278,8 @@ public class JwtServiceImpl {
         }
 
         if (accountRepository == null || userRepository == null) {
-            throw new IllegalStateException("AccountRepository hoặc UserRepository chưa được khởi tạo trong JwtServiceImpl!");
+            throw new IllegalStateException(
+                    "AccountRepository hoặc UserRepository chưa được khởi tạo trong JwtServiceImpl!");
         }
 
         // Bước 1: Kiểm tra xem tài khoản (Account) có tồn tại trong DB không
@@ -276,16 +291,20 @@ public class JwtServiceImpl {
             throw new BadRequestException("Tài khoản đã bị khóa hoặc chưa được kích hoạt!");
         }
 
-        // Bước 3: Kiểm tra token gửi lên có khớp với token đang lưu trong DB không (tránh dùng token cũ/đã đăng xuất/bị ghi đè)
-        if (token != null) {
-            if (account.getToken() == null || !token.equals(account.getToken())) {
-                throw new BadRequestException("Phiên đăng nhập không hợp lệ hoặc tài khoản đã đăng nhập trên thiết bị khác!");
+        // Bước 3: Kiểm tra token gửi lên có khớp với Access Token đang lưu trong Redis
+        // không
+        if (token != null && redisTokenService != null) {
+            String cachedAccessToken = redisTokenService.getAccessToken(accountId);
+            if (cachedAccessToken == null || !cachedAccessToken.equals(token)) {
+                throw new BadRequestException("Phiên đăng nhập đã hết hạn!");
             }
         }
 
-        // Bước 4: Kiểm tra xem user chứa accountId đó có tồn tại và ACTIVE không (join fetch role và branch)
+        // Bước 4: Kiểm tra xem user chứa accountId đó có tồn tại và ACTIVE không (join
+        // fetch role và branch)
         User user = userRepository.findByAccountIdWithDetails(accountId)
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy thông tin người dùng liên kết với tài khoản ID: " + accountId));
+                .orElseThrow(() -> new BadRequestException(
+                        "Không tìm thấy thông tin người dùng liên kết với tài khoản ID: " + accountId));
 
         if (user.getStatus() != null && user.getStatus() != AccountStatus.ACTIVE) {
             throw new BadRequestException("Thông tin người dùng đã bị khóa hoặc ngừng hoạt động!");
@@ -307,11 +326,11 @@ public class JwtServiceImpl {
     }
 
     /**
-     * Overload method hỗ trợ lấy thông tin user theo accountId mà không cần kiểm tra token DB (dành cho test/nội bộ)
+     * Overload method hỗ trợ lấy thông tin user theo accountId mà không cần kiểm
+     * tra token DB (dành cho test/nội bộ)
      */
     @Transactional(readOnly = true)
     public UserDetailCustom getUserDetailsByAccountId(Long accountId) {
         return getUserDetailsByAccountId(accountId, null);
     }
 }
-

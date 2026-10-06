@@ -11,7 +11,9 @@ import com.library.service.BranchService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,6 +25,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -161,5 +165,30 @@ public class BranchController {
 
         // Bước 2: Bọc kết quả trả về trong chuẩn ApiResponse với HTTP 200 OK
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách thống kê chi nhánh thành công!", result));
+    }
+
+    /**
+     * API xuất báo cáo thống kê toàn bộ chi nhánh ra file Excel (Dành riêng cho ADMIN).
+     * Xuất tệp tin .xlsx theo mẫu JasperReports với đầy đủ các chỉ số vĩ mô và bảng chi tiết từng chi nhánh.
+     *
+     * @param filter Bộ lọc tìm kiếm (code, name, status, fromDate, toDate) nhận qua Query Parameters
+     * @return Tệp tin Excel dạng mảng byte kèm Content-Disposition attachment để tải về
+     */
+    @GetMapping(value = "/admin/branches/statistics/export", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<byte[]> exportBranchStatistics(
+            @Valid @ModelAttribute BranchFilterRequestForm filter) {
+        // Bước 1: Gọi tầng Service xuất dữ liệu báo cáo thống kê ra mảng byte file Excel
+        byte[] excelBytes = branchService.exportBranchStatisticsExcel(filter);
+
+        // Bước 2: Thiết lập tên tệp tin động kèm dấu thời gian
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        String filename = "Bao_cao_tong_hop_chi_nhanh_" + timestamp + ".xlsx";
+
+        // Bước 3: Trả về file Excel kèm các Header phù hợp để trình duyệt tự động tải xuống
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
     }
 }

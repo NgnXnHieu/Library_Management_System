@@ -59,6 +59,33 @@ public interface BranchRepository extends JpaRepository<Branch, Long>, JpaSpecif
             @Param("filter") BranchFilterRequestForm filter,
             @Param("borrowStatuses") List<BorrowStatus> borrowStatuses,
             Pageable pageable);
+
+    /**
+     * Lấy danh sách toàn bộ thống kê chi nhánh (không phân trang) để phục vụ xuất báo cáo Excel.
+     * Sử dụng JPQL Constructor Expression chiếu trực tiếp dữ liệu lên BranchStatisticResponseDto.
+     *
+     * @param filter         Bộ lọc tìm kiếm (code, name, status, fromDate, toDate)
+     * @param borrowStatuses Danh sách trạng thái phiếu mượn hợp lệ được tính thống kê
+     * @return Danh sách toàn bộ BranchStatisticResponseDto thỏa mãn điều kiện
+     */
+    @Query(value = "SELECT new com.library.dto.branch.BranchStatisticResponseDto("
+            + "b.id, b.code, b.name, b.status, b.imageUrl, "
+            + "(SELECT SUM(i.totalQuantity) FROM Inventory i WHERE i.branch.id = b.id), "
+            + "(SELECT SUM(i.availableQuantity) FROM Inventory i WHERE i.branch.id = b.id), "
+            + "(SELECT COUNT(bs.id) FROM BorrowSlip bs WHERE bs.branch.id = b.id AND bs.status IN :borrowStatuses "
+            + "   AND (:#{#filter.fromDate} IS NULL OR bs.borrowedAt >= :#{#filter.fromDate}) "
+            + "   AND (:#{#filter.toDate} IS NULL OR bs.borrowedAt <= :#{#filter.toDate})), "
+            + "(SELECT SUM(bs.totalAmount) FROM BorrowSlip bs WHERE bs.branch.id = b.id AND bs.status IN :borrowStatuses "
+            + "   AND (:#{#filter.fromDate} IS NULL OR bs.borrowedAt >= :#{#filter.fromDate}) "
+            + "   AND (:#{#filter.toDate} IS NULL OR bs.borrowedAt <= :#{#filter.toDate}))) "
+            + "FROM Branch b "
+            + "WHERE (:#{#filter.code} IS NULL OR TRIM(:#{#filter.code}) = '' OR LOWER(b.code) LIKE LOWER(CONCAT('%', TRIM(:#{#filter.code}), '%'))) "
+            + "AND (:#{#filter.name} IS NULL OR TRIM(:#{#filter.name}) = '' OR LOWER(b.name) LIKE LOWER(CONCAT('%', TRIM(:#{#filter.name}), '%'))) "
+            + "AND (:#{#filter.status} IS NULL OR b.status = :#{#filter.status}) "
+            + "ORDER BY b.createdAt DESC")
+    List<BranchStatisticResponseDto> findAllBranchStatisticsWithFilter(
+            @Param("filter") BranchFilterRequestForm filter,
+            @Param("borrowStatuses") List<BorrowStatus> borrowStatuses);
 }
 
 

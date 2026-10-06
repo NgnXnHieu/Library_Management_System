@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="branch_statistics_excel"
+              pageWidth="1075"
+              pageHeight="842"
+              orientation="Landscape"
+              columnWidth="1075"
+              leftMargin="0"
+              rightMargin="0"
+              topMargin="0"
+              bottomMargin="0"
+              isIgnorePagination="true"
+              whenNoDataType="AllSectionsNoDetail"
+              uuid="a8b7c6d5-e4f3-4210-9876-543210abcdef">
+
+    <!-- Cấu hình thuộc tính xuất Excel tối ưu -->
+    <property name="net.sf.jasperreports.export.xls.detect.cell.type" value="true"/>
+    <property name="net.sf.jasperreports.export.xls.remove.empty.space.between.rows" value="true"/>
+    <property name="net.sf.jasperreports.export.xls.remove.empty.space.between.columns" value="true"/>
+    <property name="net.sf.jasperreports.export.xls.white.page.background" value="false"/>
+    <property name="net.sf.jasperreports.export.xls.one.page.per.sheet" value="false"/>
+
+    <!-- Danh sách Parameters toàn cục truyền từ Service -->
+    <parameter name="REPORT_PERIOD" class="java.lang.String"/>
+    <parameter name="TOTAL_OPEN_BRANCHES" class="java.lang.Long"/>
+    <parameter name="TOTAL_BRANCHES" class="java.lang.Long"/>
+    <parameter name="TOTAL_BORROWED_BOOKS" class="java.lang.Long"/>
+    <parameter name="TOTAL_REVENUE" class="java.math.BigDecimal"/>
+
+    <!-- Danh sách Fields tương ứng với BranchStatisticResponseDto -->
+    <field name="code" class="java.lang.String"/>
+    <field name="name" class="java.lang.String"/>
+    <field name="status" class="java.lang.Object"/>
+    <field name="totalBooksInStock" class="java.lang.Long"/>
+    <field name="totalAvailableBooks" class="java.lang.Long"/>
+    <field name="totalBorrowedBooks" class="java.lang.Long"/>
+    <field name="totalBorrowSlips" class="java.lang.Long"/>
+    <field name="totalRevenue" class="java.math.BigDecimal"/>
+
+    <!-- Biến tổng cộng cho dòng Summary ở chân bảng -->
+    <variable name="SUM_TOTAL_BOOKS" class="java.lang.Long" calculation="Sum">
+        <variableExpression><![CDATA[$F{totalBooksInStock} != null ? $F{totalBooksInStock} : 0L]]></variableExpression>
+    </variable>
+    <variable name="SUM_AVAILABLE_BOOKS" class="java.lang.Long" calculation="Sum">
+        <variableExpression><![CDATA[$F{totalAvailableBooks} != null ? $F{totalAvailableBooks} : 0L]]></variableExpression>
+    </variable>
+    <variable name="SUM_BORROWED_BOOKS" class="java.lang.Long" calculation="Sum">
+        <variableExpression><![CDATA[$F{totalBorrowedBooks} != null ? $F{totalBorrowedBooks} : 0L]]></variableExpression>
+    </variable>
+    <variable name="SUM_BORROW_SLIPS" class="java.lang.Long" calculation="Sum">
+        <variableExpression><![CDATA[$F{totalBorrowSlips} != null ? $F{totalBorrowSlips} : 0L]]></variableExpression>
+    </variable>
+    <variable name="SUM_REVENUE" class="java.math.BigDecimal" calculation="Sum">
+        <variableExpression><![CDATA[$F{totalRevenue} != null ? $F{totalRevenue} : java.math.BigDecimal.ZERO]]></variableExpression>
+    </variable>
+
+    <!-- 1. PHẦN TIÊU ĐỀ & CHỈ SỐ VĨ MÔ (TITLE BAND) -->
+    <title>
+        <band height="134" splitType="Stretch">
+            <!-- Tiêu đề báo cáo -->
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="0" width="1075" height="35" backcolor="#1E3A8A" forecolor="#FFFFFF" uuid="11111111-1111-1111-1111-111111111111"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="16" isBold="true"/>
+                </textElement>
+                <text><![CDATA[BÁO CÁO TỔNG HỢP CHI NHÁNH]]></text>
+            </staticText>
+
+            <!-- Thời gian kỳ báo cáo -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="0" y="35" width="1075" height="22" backcolor="#F8FAFC" forecolor="#475569" uuid="22222222-2222-2222-2222-222222222222"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isItalic="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{REPORT_PERIOD} != null && !$P{REPORT_PERIOD}.trim().isEmpty() ? $P{REPORT_PERIOD} : ("Thời gian: Hôm nay (" + new java.text.SimpleDateFormat("dd/MM/yyyy").format(new java.util.Date()) + ")")]]></textFieldExpression>
+            </textField>
+
+            <!-- Dòng đệm phân cách -->
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="57" width="1075" height="12" backcolor="#FFFFFF" uuid="33333333-3333-3333-3333-333333333333"/>
+                <text><![CDATA[]]></text>
+            </staticText>
+
+            <!-- KPI BOX 1: Tiêu đề Tổng Chi Nhánh Hoạt Động (Cột A -> C: x=0, width=365) -->
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="69" width="365" height="20" backcolor="#EFF6FF" forecolor="#1E40AF" uuid="44444444-4444-4444-4444-444444444441"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#BFDBFE"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[CHI NHÁNH HOẠT ĐỘNG]]></text>
+            </staticText>
+
+            <!-- KPI BOX 2: Tiêu đề Tổng Sách Đang Mượn (Cột D -> F: x=365, width=340) -->
+            <staticText>
+                <reportElement mode="Opaque" x="365" y="69" width="340" height="20" backcolor="#F0FDF4" forecolor="#166534" uuid="44444444-4444-4444-4444-444444444442"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#BBF7D0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[TỔNG SÁCH ĐANG MƯỢN]]></text>
+            </staticText>
+
+            <!-- KPI BOX 3: Tiêu đề Tổng Doanh Thu (Cột G -> I: x=705, width=370) -->
+            <staticText>
+                <reportElement mode="Opaque" x="705" y="69" width="370" height="20" backcolor="#FFFBEB" forecolor="#92400E" uuid="44444444-4444-4444-4444-444444444443"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#FDE68A"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[TỔNG DOANH THU TRONG KỲ]]></text>
+            </staticText>
+
+            <!-- KPI BOX 1: Giá trị Tổng Chi Nhánh Hoạt Động -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="0" y="89" width="365" height="30" backcolor="#FFFFFF" forecolor="#1D4ED8" uuid="55555555-5555-5555-5555-555555555551"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#BFDBFE"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="12" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[($P{TOTAL_OPEN_BRANCHES} != null ? $P{TOTAL_OPEN_BRANCHES} : 0L) + ($P{TOTAL_BRANCHES} != null ? (" / " + $P{TOTAL_BRANCHES} + " chi nhánh") : " chi nhánh")]]></textFieldExpression>
+            </textField>
+
+            <!-- KPI BOX 2: Giá trị Tổng Sách Đang Mượn -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="365" y="89" width="340" height="30" backcolor="#FFFFFF" forecolor="#15803D" uuid="55555555-5555-5555-5555-555555555552"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#BBF7D0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="12" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[java.text.NumberFormat.getIntegerInstance(new java.util.Locale("vi", "VN")).format($P{TOTAL_BORROWED_BOOKS} != null ? $P{TOTAL_BORROWED_BOOKS} : 0L) + " cuốn"]]></textFieldExpression>
+            </textField>
+
+            <!-- KPI BOX 3: Giá trị Tổng Doanh Thu -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="705" y="89" width="370" height="30" backcolor="#FFFFFF" forecolor="#B45309" uuid="55555555-5555-5555-5555-555555555553"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#FDE68A"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="12" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[java.text.NumberFormat.getCurrencyInstance(new java.util.Locale("vi", "VN")).format($P{TOTAL_REVENUE} != null ? $P{TOTAL_REVENUE} : java.math.BigDecimal.ZERO)]]></textFieldExpression>
+            </textField>
+
+            <!-- Khoảng trống trước bảng số liệu -->
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="119" width="1075" height="15" backcolor="#FFFFFF" uuid="66666666-6666-6666-6666-666666666666"/>
+                <text><![CDATA[]]></text>
+            </staticText>
+        </band>
+    </title>
+
+    <!-- 2. TIÊU ĐỀ CỘT CỦA BẢNG (COLUMN HEADER) -->
+    <columnHeader>
+        <band height="28" splitType="Stretch">
+            <!-- STT: 45px -->
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="0" width="45" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777771"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[STT]]></text>
+            </staticText>
+
+            <!-- Mã CN: 100px -->
+            <staticText>
+                <reportElement mode="Opaque" x="45" y="0" width="100" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777772"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Mã Chi Nhánh]]></text>
+            </staticText>
+
+            <!-- Tên Chi Nhánh: 220px -->
+            <staticText>
+                <reportElement mode="Opaque" x="145" y="0" width="220" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777773"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Tên Chi Nhánh]]></text>
+            </staticText>
+
+            <!-- Trạng Thái: 120px -->
+            <staticText>
+                <reportElement mode="Opaque" x="365" y="0" width="120" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777774"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Trạng Thái]]></text>
+            </staticText>
+
+            <!-- Tổng Sách Kho: 110px -->
+            <staticText>
+                <reportElement mode="Opaque" x="485" y="0" width="110" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777775"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Tổng Sách Kho]]></text>
+            </staticText>
+
+            <!-- Sách Khả Dụng: 110px -->
+            <staticText>
+                <reportElement mode="Opaque" x="595" y="0" width="110" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777776"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Sách Khả Dụng]]></text>
+            </staticText>
+
+            <!-- Sách Đang Mượn: 110px -->
+            <staticText>
+                <reportElement mode="Opaque" x="705" y="0" width="110" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777777"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Sách Đang Mượn]]></text>
+            </staticText>
+
+            <!-- Lượt Mượn Trong Kỳ: 110px -->
+            <staticText>
+                <reportElement mode="Opaque" x="815" y="0" width="110" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777778"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Lượt Mượn]]></text>
+            </staticText>
+
+            <!-- Doanh Thu Trong Kỳ: 150px -->
+            <staticText>
+                <reportElement mode="Opaque" x="925" y="0" width="150" height="28" backcolor="#1E40AF" forecolor="#FFFFFF" uuid="77777777-7777-7777-7777-777777777779"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Doanh Thu (VNĐ)]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <!-- 3. DỮ LIỆU TỪNG DÒNG (DETAIL BAND) -->
+    <detail>
+        <band height="24" splitType="Stretch">
+            <!-- STT -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="0" y="0" width="45" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888881"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression>
+            </textField>
+
+            <!-- Mã Chi Nhánh -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="45" y="0" width="100" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888882"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{code}]]></textFieldExpression>
+            </textField>
+
+            <!-- Tên Chi Nhánh -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="145" y="0" width="220" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888883"/>
+                <box leftPadding="5">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Left" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{name}]]></textFieldExpression>
+            </textField>
+
+            <!-- Trạng Thái (Đang mở cửa / Đóng cửa) -->
+            <textField isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="365" y="0" width="120" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888884"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[($F{status} != null && "OPEN".equalsIgnoreCase($F{status}.toString())) ? "Đang mở cửa" : "Đóng cửa"]]></textFieldExpression>
+            </textField>
+
+            <!-- Tổng Sách Kho -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="485" y="0" width="110" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888885"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{totalBooksInStock} != null ? $F{totalBooksInStock} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Sách Khả Dụng -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="595" y="0" width="110" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888886"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{totalAvailableBooks} != null ? $F{totalAvailableBooks} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Sách Đang Mượn -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="705" y="0" width="110" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888887"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{totalBorrowedBooks} != null ? $F{totalBorrowedBooks} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Lượt Mượn Trong Kỳ -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="815" y="0" width="110" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888888"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{totalBorrowSlips} != null ? $F{totalBorrowSlips} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Doanh Thu Trong Kỳ -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="925" y="0" width="150" height="24" backcolor="#FFFFFF" uuid="88888888-8888-8888-8888-888888888889"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{totalRevenue} != null ? $F{totalRevenue} : java.math.BigDecimal.ZERO]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <!-- 4. DÒNG TỔNG CỘNG HỆ THỐNG (SUMMARY BAND) -->
+    <summary>
+        <band height="28" splitType="Stretch">
+            <!-- Ô gộp Cột 1 đến Cột 4: "TỔNG CỘNG HỆ THỐNG" -->
+            <staticText>
+                <reportElement mode="Opaque" x="0" y="0" width="485" height="28" backcolor="#F1F5F9" forecolor="#1E293B" uuid="99999999-9999-9999-9999-999999999991"/>
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[TỔNG CỘNG HỆ THỐNG]]></text>
+            </staticText>
+
+            <!-- Tổng Sách Kho -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="485" y="0" width="110" height="28" backcolor="#F1F5F9" forecolor="#1E293B" uuid="99999999-9999-9999-9999-999999999992"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{SUM_TOTAL_BOOKS} != null ? $V{SUM_TOTAL_BOOKS} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Tổng Sách Khả Dụng -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="595" y="0" width="110" height="28" backcolor="#F1F5F9" forecolor="#1E293B" uuid="99999999-9999-9999-9999-999999999993"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{SUM_AVAILABLE_BOOKS} != null ? $V{SUM_AVAILABLE_BOOKS} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Tổng Sách Đang Mượn -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="705" y="0" width="110" height="28" backcolor="#F1F5F9" forecolor="#1E293B" uuid="99999999-9999-9999-9999-999999999994"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{SUM_BORROWED_BOOKS} != null ? $V{SUM_BORROWED_BOOKS} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Tổng Lượt Mượn -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="815" y="0" width="110" height="28" backcolor="#F1F5F9" forecolor="#1E293B" uuid="99999999-9999-9999-9999-999999999995"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{SUM_BORROW_SLIPS} != null ? $V{SUM_BORROW_SLIPS} : 0L]]></textFieldExpression>
+            </textField>
+
+            <!-- Tổng Doanh Thu -->
+            <textField pattern="#,##0" isBlankWhenNull="true">
+                <reportElement mode="Opaque" x="925" y="0" width="150" height="28" backcolor="#F1F5F9" forecolor="#B45309" uuid="99999999-9999-9999-9999-999999999996"/>
+                <box rightPadding="5">
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="SansSerif" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{SUM_REVENUE} != null ? $V{SUM_REVENUE} : java.math.BigDecimal.ZERO]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+
+</jasperReport>

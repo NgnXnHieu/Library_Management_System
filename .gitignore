@@ -30,6 +30,7 @@ target/
 
 ### OS / Logs ###
 *.log
+logs/
 .DS_Store
 Thumbs.db
 

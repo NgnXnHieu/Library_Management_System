@@ -25,15 +25,24 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
 
+  # ====================================================================
+  # CẤU HÌNH REDIS (CACHE & TOKEN MANAGEMENT)
+  # ====================================================================
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 5000ms
+
 # ====================================================================
 # CẤU HÌNH JWT (Dành cho việc tạo & xác thực Token sau này)
 # ====================================================================
 jwt:
   # Secret key (tối thiểu 256-bit / 32 ký tự đối với thuật toán HS256)
   secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-  # Thời gian hết hạn của Access Token (ms) - ví dụ: 86400000 ms = 1 ngày
-  expiration: 86400000
-  access-expiration: 86400000
+  # Thời gian hết hạn của Access Token (ms) - 300000 ms = 5 phút
+  expiration: 300000
+  access-expiration: 300000
   # Thời gian hết hạn của Refresh Token (ms) - ví dụ: 604800000 ms = 7 ngày
   refresh-expiration: 604800000
 
@@ -41,6 +50,14 @@ logging:
   level:
     com.library: DEBUG
     org.springframework.web: INFO
+  file:
+    name: logs/library-management.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: "logs/library-management-%d{yyyy-MM-dd}.%i.log.gz"
+      max-file-size: 10MB
+      max-history: 30
+      total-size-cap: 1GB
 
 # ====================================================================
 # CẤU HÌNH SWAGGER / OPENAPI (SPRINGDOC)

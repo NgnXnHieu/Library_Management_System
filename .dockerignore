@@ -1,0 +1,7 @@
+.git/
+.mvn/
+logs/
+uploads/
+*.docx
+.idea/
+.vscode/

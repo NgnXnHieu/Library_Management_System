@@ -71,7 +71,8 @@ public enum ErrorCode {
     // 7. CÁC MÃ LỖI TỒN KHO (INVENTORY) & MƯỢN TRẢ (BORROW SLIP) (6000 - 6999)
     // =========================================================================
     INVENTORY_NOT_FOUND_BY_ID("INVENTORY_NOT_FOUND_BY_ID", "Không tìm thấy bản ghi tồn kho với ID: %s", HttpStatus.NOT_FOUND),
-    BORROW_SLIP_NOT_FOUND("BORROW_SLIP_NOT_FOUND", "Không tìm thấy phiếu mượn với ID: %s", HttpStatus.NOT_FOUND);
+    BORROW_SLIP_NOT_FOUND("BORROW_SLIP_NOT_FOUND", "Không tìm thấy phiếu mượn với ID: %s", HttpStatus.NOT_FOUND),
+    REPORT_EXPORT_FAILED("REPORT_EXPORT_FAILED", "Xuất file báo cáo thất bại: %s", HttpStatus.INTERNAL_SERVER_ERROR);
 
     /**
      * Mã lỗi định danh (dùng để trả về cho Frontend/Client phân biệt)

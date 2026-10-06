@@ -63,5 +63,13 @@ public interface BranchService {
      * @return Trang kết quả chứa danh sách BranchStatisticResponseDto
      */
     Page<BranchStatisticResponseDto> getBranchStatistics(BranchFilterRequestForm filter);
+
+    /**
+     * Xuất dữ liệu báo cáo thống kê toàn bộ chi nhánh ra file Excel bằng JasperReports (dành riêng cho ADMIN).
+     *
+     * @param filter Bộ lọc tìm kiếm chi nhánh (code, name, status, fromDate, toDate)
+     * @return Mảng byte chứa nội dung tệp tin Excel (.xlsx)
+     */
+    byte[] exportBranchStatisticsExcel(BranchFilterRequestForm filter);
 }
 

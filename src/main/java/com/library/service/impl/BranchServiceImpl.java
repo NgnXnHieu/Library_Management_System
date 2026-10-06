@@ -21,6 +21,16 @@ import com.library.specification.BranchSpecification;
 import com.library.util.FileUtil;
 import com.library.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import net.sf.jasperreports.engine.JasperCompileManager;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+import net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter;
+import net.sf.jasperreports.export.SimpleExporterInput;
+import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
+import net.sf.jasperreports.export.SimpleXlsxReportConfiguration;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,12 +38,20 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * Service triển khai các nghiệp vụ quản lý chi nhánh thư viện.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BranchServiceImpl implements BranchService {
@@ -303,5 +321,106 @@ public class BranchServiceImpl implements BranchService {
 
         // Bước 6: Gọi truy vấn JPQL Constructor Expression qua Repository
         return branchRepository.findBranchStatisticsWithFilter(filter, borrowStatuses, pageable);
+    }
+
+    /**
+     * Xuất dữ liệu báo cáo thống kê toàn bộ chi nhánh ra file Excel bằng JasperReports (dành riêng cho ADMIN).
+     *
+     * @param filter Bộ lọc chứa code, name, status, fromDate, toDate
+     * @return Mảng byte chứa nội dung tệp tin Excel (.xlsx)
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportBranchStatisticsExcel(BranchFilterRequestForm filter) {
+        // Bước 1: Chuẩn hóa tham số bộ lọc nếu client gửi null
+        if (filter == null) {
+            filter = new BranchFilterRequestForm();
+        }
+
+        // Bước 2: Định nghĩa danh sách các trạng thái phiếu mượn hợp lệ được tính thống kê
+        List<BorrowStatus> borrowStatuses = List.of(
+                BorrowStatus.BORROWED,
+                BorrowStatus.RETURNED,
+                BorrowStatus.OVERDUE
+        );
+
+        // Bước 3: Truy vấn toàn bộ dữ liệu thống kê chi nhánh (không phân trang)
+        List<BranchStatisticResponseDto> dataList = branchRepository.findAllBranchStatisticsWithFilter(filter, borrowStatuses);
+
+        // Bước 4: Chuẩn bị các tham số báo cáo (Parameters)
+        Map<String, Object> parameters = new HashMap<>();
+
+        // Xác định chuỗi hiển thị kỳ báo cáo thời gian
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        String reportPeriod;
+        if (filter.getFromDate() == null && filter.getToDate() == null) {
+            reportPeriod = "Kỳ báo cáo: Toàn bộ thời gian";
+        } else if (filter.getFromDate() != null && filter.getToDate() != null) {
+            reportPeriod = "Kỳ báo cáo: Từ ngày " + filter.getFromDate().format(dateFormatter)
+                    + " đến ngày " + filter.getToDate().format(dateFormatter);
+        } else if (filter.getFromDate() != null) {
+            reportPeriod = "Kỳ báo cáo: Từ ngày " + filter.getFromDate().format(dateFormatter);
+        } else {
+            reportPeriod = "Kỳ báo cáo: Đến ngày " + filter.getToDate().format(dateFormatter);
+        }
+        parameters.put("REPORT_PERIOD", reportPeriod);
+
+        // Tính toán các chỉ số vĩ mô hiển thị ở các thẻ KPI
+        long totalBranches = dataList.size();
+        long openBranches = dataList.stream()
+                .filter(b -> b.getStatus() == BranchStatus.OPEN)
+                .count();
+        long totalBorrowedBooks = dataList.stream()
+                .mapToLong(b -> b.getTotalBorrowedBooks() != null ? b.getTotalBorrowedBooks() : 0L)
+                .sum();
+        BigDecimal totalRevenue = dataList.stream()
+                .map(b -> b.getTotalRevenue() != null ? b.getTotalRevenue() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        parameters.put("TOTAL_BRANCHES", totalBranches);
+        parameters.put("TOTAL_OPEN_BRANCHES", openBranches);
+        parameters.put("TOTAL_BORROWED_BOOKS", totalBorrowedBooks);
+        parameters.put("TOTAL_REVENUE", totalRevenue);
+
+        // Bước 5: Đọc file mẫu template JRXML từ classpath và biên dịch
+        String templatePath = "/reports/branch_statistics_excel.jrxml";
+        try (InputStream reportStream = getClass().getResourceAsStream(templatePath)) {
+            if (reportStream == null) {
+                log.error("Không tìm thấy tệp template JasperReports tại: {}", templatePath);
+                throw new AppException(ErrorCode.REPORT_EXPORT_FAILED, "Không tìm thấy tệp mẫu báo cáo!");
+            }
+
+            JasperReport jasperReport = JasperCompileManager.compileReport(reportStream);
+
+            // Bước 6: Đóng gói danh sách dữ liệu vào DataSource và fill vào mẫu báo cáo
+            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(dataList);
+            JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, parameters, dataSource);
+
+            // Bước 7: Cấu hình JRXlsxExporter xuất ra luồng byte Excel
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            JRXlsxExporter exporter = new JRXlsxExporter();
+            exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(outputStream));
+
+            // Thiết lập cấu hình chuyên dụng cho file Excel
+            SimpleXlsxReportConfiguration configuration = new SimpleXlsxReportConfiguration();
+            configuration.setDetectCellType(true);                  // Tự động nhận diện kiểu số/ngày
+            configuration.setRemoveEmptySpaceBetweenRows(true);     // Loại bỏ dòng trắng ngắt trang
+            configuration.setRemoveEmptySpaceBetweenColumns(true);  // Loại bỏ cột trắng dư thừa
+            configuration.setWhitePageBackground(false);           // Không vẽ nền trắng (giữ gridlines)
+            configuration.setOnePagePerSheet(false);                // Tất cả dữ liệu nằm trên 1 sheet duy nhất
+            exporter.setConfiguration(configuration);
+
+            exporter.exportReport();
+
+            // Bước 8: Trả về mảng byte dữ liệu tệp Excel hoàn chỉnh
+            return outputStream.toByteArray();
+
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Lỗi trong quá trình xuất báo cáo thống kê chi nhánh Excel: {}", e.getMessage(), e);
+            throw new AppException(ErrorCode.REPORT_EXPORT_FAILED, e.getMessage());
+        }
     }
 }

@@ -26,9 +26,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -192,6 +195,62 @@ class BranchServiceImplTest {
         assertTrue(capturedStatuses.contains(BorrowStatus.BORROWED));
         assertTrue(capturedStatuses.contains(BorrowStatus.RETURNED));
         assertTrue(capturedStatuses.contains(BorrowStatus.OVERDUE));
+    }
+
+    @Test
+    @DisplayName("Xuất báo cáo thống kê chi nhánh ra Excel thành công khi có dữ liệu")
+    void testExportBranchStatisticsExcel_Success() throws Exception {
+        // Bước 1: Chuẩn bị dữ liệu giả lập
+        BranchFilterRequestForm filter = new BranchFilterRequestForm();
+        BranchStatisticResponseDto statDto = new BranchStatisticResponseDto(
+                1L,
+                "CN01",
+                "Chi nhánh Hà Nội",
+                BranchStatus.OPEN,
+                "branches/hanoi.jpg",
+                100L,
+                70L,
+                15L,
+                new BigDecimal("1500000.00")
+        );
+
+        when(branchRepository.findAllBranchStatisticsWithFilter(eq(filter), any()))
+                .thenReturn(List.of(statDto));
+
+        // Bước 2: Gọi phương thức xuất Excel
+        byte[] result = branchService.exportBranchStatisticsExcel(filter);
+
+        // Bước 3: Kiểm tra tính hợp lệ của mảng byte và cấu trúc file Excel
+        assertNotNull(result);
+        assertTrue(result.length > 0);
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(result))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertNotNull(sheet);
+            assertTrue(sheet.getPhysicalNumberOfRows() >= 8, "Bảng Excel phải chứa tiêu đề, KPI, header và ít nhất 1 dòng dữ liệu");
+        }
+    }
+
+    @Test
+    @DisplayName("Xuất báo cáo thống kê chi nhánh ra Excel thành công khi dữ liệu rỗng (vẫn có khung bảng & KPI)")
+    void testExportBranchStatisticsExcel_EmptyData() throws Exception {
+        // Bước 1: Giả lập repository trả về danh sách rỗng
+        BranchFilterRequestForm filter = new BranchFilterRequestForm();
+        when(branchRepository.findAllBranchStatisticsWithFilter(eq(filter), any()))
+                .thenReturn(List.of());
+
+        // Bước 2: Gọi phương thức xuất Excel
+        byte[] result = branchService.exportBranchStatisticsExcel(filter);
+
+        // Bước 3: Đảm bảo JasperReports xuất ra file có tiêu đề, KPI và Header bảng (không bị 0 dòng)
+        assertNotNull(result);
+        assertTrue(result.length > 0);
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(result))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertNotNull(sheet);
+            assertTrue(sheet.getPhysicalNumberOfRows() >= 6, "File Excel khi rỗng dữ liệu vẫn phải có phần Tiêu đề, thẻ KPI và dòng Header bảng");
+        }
     }
 }
 

@@ -134,6 +134,35 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- ============================================================== -->
+        <!-- REDIS (CACHE & QUẢN LÝ TOKEN) -->
+        <!-- ============================================================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- ============================================================== -->
+        <!-- 5. XUẤT BÁO CÁO (JASPERREPORTS & APACHE POI) -->
+        <!-- ============================================================== -->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports</artifactId>
+            <version>6.21.3</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.lowagie</groupId>
+                    <artifactId>itext</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+
 
         <!-- ============================================================== -->
         <!-- 5. THƯ VIỆN TEST -->
